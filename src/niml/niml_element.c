@@ -1586,6 +1586,7 @@ int NI_search_group_shallow( NI_group *ngr , char *enam , void ***nipt )
       - Return value of function is number of elements found (might be 0).
       - If something is found, then *nipt is an array of 'void *', each
         of which points to a matching element.
+          - if nipt == NULL, this function now just returns a count
       - The returned elements might be group or data elements.
       - Sample usage:
           - int n,i ; void **nelar ;
@@ -1602,7 +1603,7 @@ int NI_search_group_deep( NI_group *ngr , char *enam , void ***nipt )
 
    if( ngr  == NULL || ngr->type != NI_GROUP_TYPE    ) return 0 ;
    if( enam == NULL || *enam == '\0'                 ) return 0 ;
-   /* if nipt == NULL, just return a count */
+   /* if nipt == NULL, just return a count      25 Apr 2017 [rickr] */
    if( ngr->part_num == 0                            ) return 0 ;
 
    for( ii=0 ; ii < ngr->part_num ; ii++ ){
