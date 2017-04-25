@@ -1601,28 +1601,37 @@ int NI_search_group_deep( NI_group *ngr , char *enam , void ***nipt )
    char *nm ;
 
    if( ngr  == NULL || ngr->type != NI_GROUP_TYPE    ) return 0 ;
-   if( enam == NULL || *enam == '\0' || nipt == NULL ) return 0 ;
+   if( enam == NULL || *enam == '\0'                 ) return 0 ;
+   /* if nipt == NULL, just return a count */
    if( ngr->part_num == 0                            ) return 0 ;
 
    for( ii=0 ; ii < ngr->part_num ; ii++ ){
      nini = ngr->part[ii] ;
      nm   = NI_element_name( nini ) ;
      if( nm != NULL && strcmp(nm,enam) == 0 ){
-       nelar = (void **) NI_realloc(nelar,void*,(nn+1)*sizeof(void *)) ;
-       nelar[nn++] = nini ;
+       nn++;
+       if( nipt ) {
+          nelar = (void **) NI_realloc(nelar,void*,nn*sizeof(void *)) ;
+          nelar[nn] = nini ;
+       }
      }
      if( NI_element_type(nini) == NI_GROUP_TYPE ){  /* recursion */
        int nsub , jj ; void **esub ;
-       nsub = NI_search_group_deep( nini , enam , &esub ) ;
+       if( nipt ) nsub = NI_search_group_deep( nini , enam , &esub ) ;
+       else       nsub = NI_search_group_deep( nini , enam , NULL ) ;
+
        if( nsub > 0 ){
-         nelar = (void **) NI_realloc(nelar,void*,(nn+nsub)*sizeof(void *)) ;
-         for( jj=0 ; jj < nsub ; jj++ ) nelar[nn++] = esub[jj] ;
-         NI_free(esub) ;
+         if( nipt ) {
+            nelar = (void **) NI_realloc(nelar,void*,(nn+nsub)*sizeof(void *)) ;
+            for( jj=0 ; jj < nsub ; jj++ ) nelar[nn+jj] = esub[jj] ;
+            NI_free(esub) ;
+         }
+         nn += nsub;
        }
      }
    }
 
-   if( nn > 0 ) *nipt = nelar ;
+   if( nn > 0 && nipt ) *nipt = nelar ;
    return nn ;
 }
 
