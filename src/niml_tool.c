@@ -434,7 +434,7 @@ int NI_group_name(NI_group *ngr,char *name_out){
 
 /*************************************************************************/
 // add to array
-int elm_arr( void *ni_in, elm_struct **arr_in, int indent, void *parent)
+int elm_arr( void *ni_in, elm_struct **arr_in, int indent, void *parent, int arr_size)
 {
   char elm_name[1000] = "";
   char par_name[1000] = "";
@@ -443,8 +443,9 @@ int elm_arr( void *ni_in, elm_struct **arr_in, int indent, void *parent)
   // what type
   elm_type = NI_element_type( ni_in );
   if(elm_type == -1){ return loop_num; }
-  if(loop_num > 0){
-    *arr_in = (elm_struct *) realloc(*arr_in, sizeof(elm_struct) * (loop_num + 1) );
+  if(loop_num > arr_size){
+    arr_size = arr_size + 20;
+    *arr_in = realloc(*arr_in, sizeof(elm_struct) * arr_size );
   }
   if( elm_type == NI_ELEMENT_TYPE ){   // it is data
     NI_element *ni_elm = (NI_element *) ni_in;
@@ -499,7 +500,7 @@ int elm_arr( void *ni_in, elm_struct **arr_in, int indent, void *parent)
     }
     // recursive through the number of parts
     for( NumParts=0; NumParts < ni_grp->part_num; NumParts++ ){
-      elm_arr(ni_grp->part[NumParts],arr_in,indent,ni_in);
+      elm_arr(ni_grp->part[NumParts],arr_in,indent,ni_in,arr_size);
     }
   }
   return loop_num;
@@ -523,9 +524,9 @@ int main( int argc , char *argv[] )
   char input1[1000], input2[1000], prefix[1000], copy_elm[1000], del_elm[1000];
 
   // allocate 1
-  n_struct1 = malloc(sizeof(elm_struct));
-  n_struct2 = malloc(sizeof(elm_struct));
-  n_struct_out = malloc(sizeof(elm_struct));
+  n_struct1 = malloc(sizeof(elm_struct) * 20);
+  n_struct2 = malloc(sizeof(elm_struct) * 20);
+  n_struct_out = malloc(sizeof(elm_struct) * 20);
 
   /*******************************************************/
   /* parse aruguments (and read in files)*/
@@ -729,9 +730,9 @@ int main( int argc , char *argv[] )
 
     // add to arrays, reseting global counts
     loop_num = 0;
-    loop_num1 = elm_arr(nini1,&n_struct1,0,nini1);
+    loop_num1 = elm_arr(nini1,&n_struct1,0,nini1,20);
     loop_num = 0;
-    loop_num2 = elm_arr(nini2,&n_struct2,0,nini2);
+    loop_num2 = elm_arr(nini2,&n_struct2,0,nini2,20);
 
     if (loop_num1 >= loop_num2){
       loop_max = loop_num1;
