@@ -1586,11 +1586,12 @@ int NI_search_group_shallow( NI_group *ngr , char *enam , void ***nipt )
       - Return value of function is number of elements found (might be 0).
       - If something is found, then *nipt is an array of 'void *', each
         of which points to a matching element.
+          - if nipt == NULL, this function now just returns a count
       - The returned elements might be group or data elements.
       - Sample usage:
           - int n,i ; void **nelar ;
           - n = NI_search_group_shallow( ngr , "fred" , &nelar ) ;
-          - for( i=0 ; i < n ; i++ ) do_something( nelar[ii] ) ;
+          - for( i=0 ; i < n ; i++ ) do_something( nelar[i] ) ;
           - if( n > 0 ) NI_free(nelar) ;
 -------------------------------------------------------------------------*/
 
@@ -1600,9 +1601,10 @@ int NI_search_group_deep( NI_group *ngr , char *enam , void ***nipt )
    int ii , nn=0 ;
    char *nm ;
 
+   /* if nipt == NULL, just return a count      25 Apr 2017 [rickr] */
+
    if( ngr  == NULL || ngr->type != NI_GROUP_TYPE    ) return 0 ;
    if( enam == NULL || *enam == '\0'                 ) return 0 ;
-   /* if nipt == NULL, just return a count */
    if( ngr->part_num == 0                            ) return 0 ;
 
    for( ii=0 ; ii < ngr->part_num ; ii++ ){
@@ -1612,7 +1614,7 @@ int NI_search_group_deep( NI_group *ngr , char *enam , void ***nipt )
        nn++;
        if( nipt ) {
           nelar = (void **) NI_realloc(nelar,void*,nn*sizeof(void *)) ;
-          nelar[nn] = nini ;
+          nelar[nn-1] = nini ;
        }
      }
      if( NI_element_type(nini) == NI_GROUP_TYPE ){  /* recursion */
