@@ -11,6 +11,7 @@
 #include "niml.h"
 #include "mrilib.h"
 #include <libgen.h>
+#include "SUMA_suma.h"
 
 typedef struct    // only parts are used for the comparison option
 {
@@ -525,11 +526,12 @@ int main( int argc , char *argv[] )
 
   // various variables
   int nn, loop_max, nopt=1, NotDone=1;
-  int verb=0, pr_int=0, comp=0, del_ete=0, co_py=0, help=0;
+  int verb=0, pr_int=0, comp=0, del_ete=0, co_py=0, help=0, node2graph=0;
   int i, i1, i2, j, val, es_size=20;
   int loop_num1=0, loop_num2=0;
-  char input1[1000]="", input2[1000]="", prefix[1000]="", 
-      copy_elm[1000]="", del_elm[1000]="";
+  char input1[1000]="", input2[1000]="", prefix[1000]="";
+  char input1full[1000]="", input2full[1000]="";
+  char copy_elm[1000]="", del_elm[1000]="";
 
   // allocate 20
   n_struct1 = malloc(sizeof(elm_struct) * 20);
@@ -544,7 +546,7 @@ int main( int argc , char *argv[] )
   while( nopt < argc ){
     if( strcmp(argv[nopt],"-print" ) == 0 ){
       pr_int=1; nopt++;
-      if(comp || co_py || del_ete || help){
+      if(comp || co_py || del_ete || help || node2graph){
         fprintf(stderr,"\nError: too many options on command line!");
         return 1;
       }
@@ -552,7 +554,7 @@ int main( int argc , char *argv[] )
     }
     if( strcmp(argv[nopt],"-compare" ) == 0 ){
       comp=1; nopt++;
-      if(pr_int || co_py || del_ete || help){
+      if(pr_int || co_py || del_ete || help || node2graph){
         fprintf(stderr,"\nError: too many options on command line!\n\n");
         return 1;
       }
@@ -572,6 +574,7 @@ int main( int argc , char *argv[] )
         return 1;
       }
       strcpy(input1,basename(argv[nopt+1]));
+      strcpy(input1full,argv[nopt+1]);
       nini1 = read_niml_file(argv[++nopt],1);
       nopt++; continue;
     }
@@ -586,7 +589,7 @@ int main( int argc , char *argv[] )
     }
     if( strcmp(argv[nopt],"-copy" ) == 0 ){
       co_py = 1;
-      if(pr_int || comp || del_ete || help){
+      if(pr_int || comp || del_ete || help || node2graph){
         fprintf(stderr,"\nError: too many options on command line!\n\n");
         return 1;
       }
@@ -599,7 +602,7 @@ int main( int argc , char *argv[] )
     }
     if( strcmp(argv[nopt],"-delete" ) == 0 ){
       del_ete = 1;
-      if(pr_int || comp || co_py || help){
+      if(pr_int || comp || co_py || help || node2graph){
         fprintf(stderr,"\nError: too many options on command line!\n\n");
         return 1;
       }
@@ -608,17 +611,25 @@ int main( int argc , char *argv[] )
     }
     if( strcmp(argv[nopt],"-help" ) == 0 ){
       help = 1;
-      if(pr_int || comp || co_py || del_ete){
+      if(pr_int || comp || co_py || del_ete || node2graph){
         fprintf(stderr,"\nError: too many options on command line!\n\n");
         return 1;
       }
       nopt++; continue;
     }
+//    if( strcmp(argv[nopt],"-node2graph" ) == 0 ){
+//      node2graph = 1;
+//      if(pr_int || comp || co_py || del_ete || help){
+//        fprintf(stderr,"\nError: too many options on command line!\n\n");
+//        return 1;
+//      }
+//      nopt++; continue;
+//    }
     nopt++;
   }
 
   // check to see if something was selected to do
-  if(!(pr_int || comp || co_py || del_ete || help)) help = 1;
+  if(!(pr_int || comp || co_py || del_ete || help || node2graph)) help = 1;
   if(strcmp(input1,"") == 0){
     fprintf(stderr,"\nError: missing -source!\n\n");
     return 1;
@@ -745,6 +756,17 @@ int main( int argc , char *argv[] )
   }   // end copy
 
   /*******************************************************/
+  // convert node to graph and copy NODE_COORDS
+
+//  if(node2graph){
+//    SUMA_DSET *nini1_dset;
+//    nini1_dset = SUMA_LoadDset_ns(input1full,0,0);
+//    SUMA_Dset_to_GDSET(&nini1_dset,0,0,0,0,0);
+//    SUMA_WriteDset_ns(prefix,nini1_dset,0,1,0);
+//    return 0;
+//  }   // end node2graph
+
+  /*******************************************************/
   // sorting and matching for comparison
 
   if(comp){
@@ -752,8 +774,10 @@ int main( int argc , char *argv[] )
     // add to arrays, reseting global counts
     loop_num = 0;
     loop_num1 = elm_arr(nini1,&n_struct1,0,nini1,20);
-    loop_num = 0;
-    loop_num2 = elm_arr(nini2,&n_struct2,0,nini2,20);
+    if(strcmp(input2,"") != 0){
+      loop_num = 0;
+      loop_num2 = elm_arr(nini2,&n_struct2,0,nini2,20);
+    }
 
     if (loop_num1 >= loop_num2){
       loop_max = loop_num1;
