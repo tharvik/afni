@@ -182,7 +182,7 @@ foreach(target model_beta model_constant model_conv_PRF model_conv_PRF_6
 	target_link_libraries(${target} mri)
 endforeach(target)
 
-foreach(target 3dedge3 Xphace afni afni_open aiv)
+foreach(target 3dedge3 Xphace afni_open aiv)
 	add_library(${target} ${target}.c)
 endforeach(target)
 
@@ -225,7 +225,7 @@ foreach(target 1dAstrip 1dBandpass 1dBport 1dCorrelate 1dFlagMotion 1dMarry
 		3dnewid 3dnoise 3dnvals 3dpc 3drefit 3drename 3drotate
 		3dsvm_linpredict 3dtoXdataset 3dttest++ 3dvolreg 4swap AlphaSim
 		DTIStudioFibertoSegments FIRdesign GLTsymtest Ifile RSFgen
-		Vecwarp abut adwarp afni_vcheck apsearch bitvec byteorder
+		Vecwarp abut adwarp afni afni_vcheck apsearch bitvec byteorder
 		cat_matvec cdf count dicom_hdr dicom_hinfo dicom_to_raw ent16
 		epsim exx fdrval fftest float_scan from3d ftosh ge_header
 		help_format ibinom im2niml images_equal imand imaver imcalc

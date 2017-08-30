@@ -25,7 +25,7 @@ install:
                    "${F2C_PKG}_${F2C_VERSION}.deb"
 
 script:
-    - mkdir build; cd build
+    - mkdir build && cd build
     - cmake ..
     - make -j$(nproc)
-    - make test
+    - cd tests && ctest --verbose
