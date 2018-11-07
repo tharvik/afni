@@ -1,5 +1,5 @@
 #include "stdio.h"
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 /* called when a subscript is out of range */
 

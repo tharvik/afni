@@ -4,7 +4,7 @@
  * as in  a(2:5) = a(4:7) .
  */
 
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 /* assign strings:  a = b */
 

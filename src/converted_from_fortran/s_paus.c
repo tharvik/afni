@@ -1,6 +1,6 @@
 #include "stdlib.h"
 #include "stdio.h"
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #define PAUSESIG 15
 
 #ifdef KR_headers

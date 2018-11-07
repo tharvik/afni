@@ -9,7 +9,7 @@
  * with the added side effect of supplying rc as the program's exit code.
  */
 
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #undef abs
 #undef min
 #undef max

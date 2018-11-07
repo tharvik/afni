@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 double pow_ri(ap, bp) real *ap; integer *bp;

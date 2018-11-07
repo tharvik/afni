@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 VOID r_cnjg(r, z) complex *r, *z;

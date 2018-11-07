@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #define log10e 0.43429448190325182765
 

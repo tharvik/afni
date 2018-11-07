@@ -1,6 +1,6 @@
 /* EFL support routine to compare two character strings */
 
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 extern integer s_cmp();

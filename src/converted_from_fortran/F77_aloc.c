@@ -1,6 +1,6 @@
 #include "stdio.h"
 #include "stdlib.h"
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #undef abs
 #undef min
 #undef max

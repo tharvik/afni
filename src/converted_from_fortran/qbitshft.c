@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
  longint
 #ifdef KR_headers

@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #include "fio.h"
 #include "fmt.h"
 extern char *f__icptr;

@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 shortint pow_hh(ap, bp) shortint *ap, *bp;

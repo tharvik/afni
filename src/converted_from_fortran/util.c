@@ -2,7 +2,7 @@
 #include "sys/types.h"
 #include "sys/stat.h"
 #endif
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #include "fio.h"
 
  VOID

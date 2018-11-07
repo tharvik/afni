@@ -1,7 +1,8 @@
 cmake_minimum_required (VERSION 3.2)
 project(AFNI)
 
-
+include(FindX11)
+include(FindMotif)
 set(AFNI_MAJOR_VERSION 17)
 set(AFNI_MINOR_VERSION 1)
 set(AFNI_PATCH_VERSION 12)
@@ -11,8 +12,9 @@ string(TIMESTAMP BUILD_DATE "%m %d %Y")
 configure_file(AFNI_version.h.in "${CMAKE_CURRENT_BINARY_DIR}/AFNI_version.h" @ONLY)
 
 
-find_package(f2c REQUIRED)
+# find_package(f2c REQUIRED)
 find_package(Xt REQUIRED)
+
 
 
 include_directories(
@@ -34,6 +36,7 @@ add_subdirectory(python_scripts)
 add_subdirectory(R_scripts)
 
 
+
 # bundled library (XXX to remove/package elsewhere)
 macro(optional_bundle name)
 	string(TOUPPER ${name} upper)
@@ -46,8 +49,12 @@ macro(optional_bundle name)
 	endif(USE_SYSTEM_${upper})
 endmacro(optional_bundle)
 
-foreach(bundled 3DEdge avovk coxplot crorden eispack gifti netcdf nifti niml
-		ptaylor qhull rickr SUMA svm volpack XmHTML)
+# not sure how to resolve cyclic dependency between 3dedge and suma so add the
+# include dir for 3edge here
+SET(3DEDGE_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/3DEdge/src)
+
+foreach(bundled avovk coxplot crorden eispack gifti  nifti niml Audio
+       ptaylor qhull rickr SUMA svm volpack XmHTML 3DEdge converted_from_fortran)
 	optional_bundle(${bundled})
 endforeach(bundled)
 
@@ -62,6 +69,8 @@ if(NOT CHECK_FRAME_BUFFER)
 endif(NOT CHECK_FRAME_BUFFER)
 
 # --
+# find_package (NetCDF REQUIRED)
+FIND_LIBRARY(NETCDF_LIBRARY netcdf)
 
 file(GLOB AFOBJS "afni*.c")
 list(APPEND AFOBJS pbar.c $<TARGET_OBJECTS:parser> mcw_graf.c)
@@ -70,24 +79,24 @@ file(GLOB T3OBJS  "to3d*.c")
 
 file(GLOB MRI_OBJS "mri_*.c")
 list(APPEND MRI_OBJS csfft.c mcw_glob.c mcw_malloc.c cox_render.c debugtrace.c ge4_header.c rcmat.c dmat44.c)
-foreach(filename mri_affine.c mri_pc_pursuit.c mri_process_siemens.c mri_quantize.c)
-	list(REMOVE_ITEM MRI_OBJS "${PROJECT_SOURCE_DIR}/${filename}")
+foreach(filename mri_affine.c mri_pc_pursuit.c mri_process_siemens.c mri_quantize.c mri_alphasim.c mri_wf.c mri_gwarp.c mri_pvmap.c)
+   list(REMOVE_ITEM MRI_OBJS ${PROJECT_SOURCE_DIR}/${filename})
 endforeach(filename)
 
 file(GLOB THD_OBJS "thd_*.c")
 list(APPEND THD_OBJS afni_vedit.c ktaub.c bilinear_warp3D.c)
 foreach(filename thd_bstrap_corr.c thd_gifti.c thd_md5.c thd_rot3d_2byte.c
-		thd_serialate.c thd_ttatlas_CA_EZ.c thd_Xdataset.c thd_base64.c
-		thd_xwebber.c)
-	list(REMOVE_ITEM THD_OBJS "${PROJECT_SOURCE_DIR}/${filename}")
+    thd_serialate.c thd_ttatlas_CA_EZ.c thd_Xdataset.c thd_base64.c
+    thd_xwebber.c thd_shearwarp.c)
+  list(REMOVE_ITEM THD_OBJS "${PROJECT_SOURCE_DIR}/${filename}")
 endforeach(filename)
-
 file(GLOB EDT_OBJS "edt_*.c")
 
 file(GLOB CS_OBJS "cs_*.c")
 list(APPEND CS_OBJS multivector.c afni_environ.c cl2.c machdep.c afni_logger.c cl1.c powell_int.c powell_newuoa.c rhdd.c zfun.c svdlib.c)
 list(REMOVE_ITEM CS_OBJS "${PROJECT_SOURCE_DIR}/cs_color.c")
 list(REMOVE_ITEM CS_OBJS "${PROJECT_SOURCE_DIR}/cs_simult.c")
+list(REMOVE_ITEM CS_OBJS "${PROJECT_SOURCE_DIR}/cs_symeig23.c")
 
 file(GLOB SUMA_OBJS "suma_*.c")
 list(REMOVE_ITEM SUMA_OBJS "${PROJECT_SOURCE_DIR}/suma_gifti.c")
@@ -111,7 +120,7 @@ set(IMOBJS display.c imseq.c bbox.c xim.c xutil.c LiteClue.c thd_xwebber.c)
 
 file(GLOB AFNI_HIST_FILES "afni_history*.c")
 foreach(filename afni_fimmer_compute.c afni_history.c afni_open.c
-		afni_pcor_update.c afni_slice.c ${AFNI_HIST_FILES})
+		afni_pcor_update.c afni_slice.c afni_vcheck.c ${AFNI_HIST_FILES})
 	list(REMOVE_ITEM AFOBJS "${PROJECT_SOURCE_DIR}/${filename}")
 endforeach(filename)
 
@@ -150,11 +159,11 @@ endfunction(configure_pcor)
 configure_pcor(pcor "REF_FLOAT_SINGLE")
 configure_pcor(pcorsh "REF_FLOAT_SINGLE;VOX_SHORT")
 
-foreach(filename colfit colcalc parser)
-	add_custom_command(OUTPUT "${filename}.c"
-		COMMAND ${F2C_BIN} "${PROJECT_SOURCE_DIR}/${filename}.f"
-		MAIN_DEPENDENCY "${filename}.f")
-endforeach(filename)
+# foreach(filename colfit colcalc parser)
+# 	add_custom_command(OUTPUT "${filename}.c"
+# 		COMMAND ${F2C_BIN} "${PROJECT_SOURCE_DIR}/${filename}.f"
+# 		MAIN_DEPENDENCY "${filename}.f")
+# endforeach(filename)
 
 
 foreach(target model_beta model_constant model_conv_PRF model_conv_PRF_6
@@ -182,12 +191,13 @@ foreach(target model_beta model_constant model_conv_PRF model_conv_PRF_6
 	target_link_libraries(${target} mri)
 endforeach(target)
 
-foreach(target 3dedge3 Xphace afni_open aiv)
-	add_library(${target} ${target}.c)
+foreach(target Xphace afni afni_open aiv)
+  add_library(${target} ${target}.c)
+  target_include_directories(${target} PUBLIC ${NIFTI_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
 endforeach(target)
 
 add_library(afobj ${AFOBJS})
-add_library(mri ${MRI_OBJS} ${THD_OBJS} ${EDT_OBJS} ${CS_OBJS} ${SUMA_OBJS} ${MISC_OBJS} ${SOMEAFOBJS} ${NIML_OBJS})
+add_library(mri ${MRI_OBJS} ${THD_OBJS} ${EDT_OBJS} ${CS_OBJS} ${SUMA_OBJS} ${MISC_OBJS} ${SOMEAFOBJS} ${NIML_OBJS} ${AUDIO_OBJS})
 add_library(mrix ${IMOBJS})
 add_library(parser OBJECT parser.c parser_int.c)
 add_library(plug_drealtime plug_realtime.c)
@@ -225,7 +235,7 @@ foreach(target 1dAstrip 1dBandpass 1dBport 1dCorrelate 1dFlagMotion 1dMarry
 		3dnewid 3dnoise 3dnvals 3dpc 3drefit 3drename 3drotate
 		3dsvm_linpredict 3dtoXdataset 3dttest++ 3dvolreg 4swap AlphaSim
 		DTIStudioFibertoSegments FIRdesign GLTsymtest Ifile RSFgen
-		Vecwarp abut adwarp afni afni_vcheck apsearch bitvec byteorder
+		Vecwarp abut adwarp afni_vcheck apsearch bitvec byteorder
 		cat_matvec cdf count dicom_hdr dicom_hinfo dicom_to_raw ent16
 		epsim exx fdrval fftest float_scan from3d ftosh ge_header
 		help_format ibinom im2niml images_equal imand imaver imcalc
@@ -237,13 +247,13 @@ foreach(target 1dAstrip 1dBandpass 1dBport 1dCorrelate 1dFlagMotion 1dMarry
 		uniq_images unu warping_test whereami whirlgif
 )
 	add_executable(${target} ${target}.c)
-	target_link_libraries(${target} mri)
+	target_link_libraries(${target} mri mrix)
 endforeach(target)
 
 foreach(i "" 2 3)
 	set(target 3dANOVA${i}) 
 	add_executable(${target} ${target}.c 3dANOVA.lib)
-	target_link_libraries(${target} mri)
+	target_link_libraries(${target} mri mrix)
 endforeach(i)
 
 foreach(target 1dNLfit 1deval 1dmatcalc 3dDeconvolve 3dDetrend 3dTstat 3dcalc
@@ -251,8 +261,10 @@ foreach(target 1dNLfit 1deval 1dmatcalc 3dDeconvolve 3dDetrend 3dTstat 3dcalc
 		ccalc waver
 )
 	add_executable(${target} ${target}.c $<TARGET_OBJECTS:parser>)
-	target_link_libraries(${target} mri)
+	target_link_libraries(${target} mri mrix)
 endforeach(target)
+target_link_libraries(3dproject volpack)
+
 
 add_executable(3dTfitter 3dTfitter.c thd_fitter.c thd_lasso.c)
 add_executable(3dfim 3dfim.c afni_pcor_float.c ts.c)
@@ -264,7 +276,6 @@ add_executable(3danisosmooth 3danisosmooth.c DWIstructtensor.c)
 add_executable(1dSEM 1dSEM.c sqrmat.c matrix.c)
 add_executable(3dNLfim_n 3dNLfim.c)
 add_executable(gwarp mri_gwarp.c)
-add_executable(malp mri_alphasim.c)
 add_executable(3dmaxima 3dmaxima.c maxima.c)
 add_executable(3dDeconvolve_n 3dDeconvolve.c $<TARGET_OBJECTS:parser>)
 add_executable(3dDeconvolve_f 3dDeconvolve.c $<TARGET_OBJECTS:parser>)
@@ -274,43 +285,66 @@ add_executable(3dMSE 3dMSE.c sparse_array.c)
 add_executable(1dgrayplot 1dgrayplot.c display.c)
 add_executable(1dplot 1dplot.c display.c)
 add_executable(3dretroicor 3dretroicor.c retroicor.c)
+add_executable(3dedge3 ${3DEDGE_INCLUDE_DIRS}/3dedge3.c)
 
 
 set_source_files_properties(3dDeconvolve_f PROPERTIES COMPILE_DEFINITIONS "FLOATIZE")
 set_source_files_properties(gifti_choice.c PROPERTIES COMPILE_DEFINITIONS "DTYPE=${type}")
 
 set_target_properties(afni PROPERTIES PUBLIC_HEADER "${AFNI_HEADERS}")
-set_target_properties(mri PROPERTIES PUBLIC_HEADER "${LIBHEADERS}")
-
-target_include_directories(3dedge3 PRIVATE ${3DEDGE_INCLUDE_DIRS})
-target_include_directories(mri PUBLIC ${GIFTI_INCLUDE_DIRS} ${NIFTI_INCLUDE_DIRS} ${NIML_INCLUDE_DIRS} ${RICKR_INCLUDE_DIRS})
-target_include_directories(mrix PRIVATE ${XMHTML_INCLUDE_DIRS} ${GIFTI_INCLUDE_DIRS})
-target_include_directories(parser PRIVATE ${NIFTI_INCLUDE_DIRS} ${NIML_INCLUDE_DIRS} ${RICKR_INCLUDE_DIRS})
+set_target_properties(mri PROPERTIES PUBLIC_HEADER ${LIBHEADERS})
 
 
-foreach(target 3dfim 3dTfitter FD2 fim2 imreg gwarp 3danisosmooth malp 3dmaxima
-		3dNLfim_n 3dAllineate 3dECM 3dMSE 1dSEM 3dretroicor
+
+message(Nifti existence ${NIFTI_INCLUDE_DIRS})
+# target_include_directories(afni_warp PUBLIC ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(3dDeconvolve PUBLIC ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(3dDeconvolve_f PUBLIC ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(3dMSE PUBLIC ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(3dretroicor PUBLIC ${COXPLOT_INCLUDE_DIRS} ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${NIFTI_INCLUDE_DIRS})
+target_include_directories(3DEdge PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(SUMA PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(rickr PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(coxplot PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS})
+target_include_directories(eispack PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS})
+target_include_directories(mri  PUBLIC ${NIFTI_INCLUDE_DIRS} ${RICKR_INCLUDE_DIRS}
+  ${3DEDGE_INCLUDE_DIRS} ${AUDIO_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS}
+  )
+target_include_directories(mrix PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${XMHTML_INCLUDE_DIRS} ${GIFTI_INCLUDE_DIRS} ${NIFTI_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(afobj PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${NIFTI_INCLUDE_DIRS} ${XMHTML_INCLUDE_DIRS} ${GIFTI_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(parser PRIVATE ${NIFTI_INCLUDE_DIRS}
+${NIML_INCLUDE_DIRS} ${RICKR_INCLUDE_DIRS} ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS})
+target_include_directories(to3d PRIVATE ${MOTIF_INCLUDE_DIR} )
+target_include_directories(1dplot PRIVATE  ${XT_INCLUDE_DIR} ${X11_INCLUDE_DIRS} )
+
+foreach(target 3dfim 3dTfitter FD2 fim2 imreg gwarp 3danisosmooth 3dmaxima
+		3dNLfim_n 3dAllineate 3dECM 3dMSE 1dSEM 
 		plug_drealtime plug_maxima plug_retroicor
 )
-	target_link_libraries(${target} mri)
-endforeach(target)
 
-target_link_libraries(1dgrayplot mri coxplot)
-target_link_libraries(1dplot mrix)
+   target_link_libraries(${target} mri rickr mrix)
+endforeach(target)
+target_link_libraries(3dretroicor coxplot mri converted_from_fortran mrix)
+
+# target_link_libraries(parser coxplot)
+target_link_libraries(1dgrayplot mri coxplot ${XT_LIBRARIES})
+target_link_libraries(1dplot mrix mri nifti2_io ${X11_Xt_LIB} ${X11_LIBRARIES})
 target_link_libraries(3dDeconvolve mri coxplot)
 target_link_libraries(3dDeconvolve_f mri coxplot)
 target_link_libraries(3dDeconvolve_n mri coxplot)
-target_link_libraries(3dedge3 niml)
-target_link_libraries(Xphace mrix)
+target_link_libraries(Xphace mrix nifti2_io)
 target_link_libraries(afni afobj)
 target_link_libraries(afni_open afobj)
-target_link_libraries(afobj ${XT_LIBRARIES} mrix)
-target_link_libraries(aiv mrix)
-target_link_libraries(mri rickr nifti2_io eispack netcdf m znz nifticdf giftiio
-	${XMHTML_LIBRARIES} ${VOLPACK_LIBRARIES} ${F2C_LIBRARIES} ${XT_LIBRARIES})
-target_link_libraries(mrix mri coxplot)
-target_link_libraries(to3d mrix)
+target_link_libraries(afobj ${XT_LIBRARIES} mrix coxplot)
+target_link_libraries(aiv mrix nifti2_io)
+# target_include_directories(aiv ${NIFTI_INCLUDE_DIRS})
 
+target_link_libraries(mri mrix rickr nifti2_io eispack netcdf m znz nifticdf giftiio 3DEdge volpack
+   ${XMHTML_LIBRARIES} ${CONVERTED_FROM_FORTRAN_LIBRARIES} ${XT_LIBRARIES})
+target_link_libraries(mrix coxplot)
+target_link_libraries(to3d mri mrix nifti2_io ${MOTIF_LIBRARIES} ${XT_LIBRARIES})
+
+target_link_libraries(3dedge3 nifti2_io mri)
 
 install(TARGETS afni
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

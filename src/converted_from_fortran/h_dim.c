@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 shortint h_dim(a,b) shortint *a, *b;

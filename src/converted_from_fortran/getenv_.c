@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 /*
  * getenv - f77 subroutine to return environment variables

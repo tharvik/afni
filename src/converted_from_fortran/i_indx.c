@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 #ifdef KR_headers
 integer i_indx(a, b, la, lb) char *a, *b; ftnlen la, lb;

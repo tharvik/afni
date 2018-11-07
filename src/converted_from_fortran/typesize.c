@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 ftnlen f__typesize[] = { 0, 0, sizeof(shortint), sizeof(integer),
 			sizeof(real), sizeof(doublereal),

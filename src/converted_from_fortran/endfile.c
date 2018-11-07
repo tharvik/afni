@@ -1,5 +1,5 @@
 #include "stdlib.h"
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #include "fio.h"
 #ifndef NON_UNIX_STDIO
 #include "sys/types.h"

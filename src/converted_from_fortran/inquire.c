@@ -1,4 +1,4 @@
-#include "f2c.h"
+#include "converted_from_fortran.h"
 #include "fio.h"
 #ifdef KR_headers
 integer f_inqu(a) inlist *a;

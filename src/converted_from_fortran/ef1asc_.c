@@ -1,6 +1,6 @@
 /* EFL support routine to copy string b to string a */
 
-#include "f2c.h"
+#include "converted_from_fortran.h"
 
 
 #define M	( (long) (sizeof(long) - 1) )

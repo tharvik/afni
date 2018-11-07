@@ -77,7 +77,7 @@ message of the form
 On many systems, it is best to combine libF77 and libI77 into a single
 library, say libf2c, as suggested in "readme from f2c".  If you do not
 do this, then you should adjust the definition of link_msg in sysdep.c
-appropriately (e.g., replacing "-lf2c" by "-lF77 -lI77").  On Unix
+appropriately (e.g., replacing "-lconverted_from_fortran" by "-lF77 -lI77").  On Unix
 systems, the easiest way to create libf2c.a is to make libF77/libF77.a
 and libI77/libI77.a (after reading and heeding libF77/README and
 libI77/README), and then to say
