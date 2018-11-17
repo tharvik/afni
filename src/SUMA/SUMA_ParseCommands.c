@@ -1178,7 +1178,8 @@ SUMA_Boolean SUMA_RegisterMessage ( DList *list, char *Message,
          break;
       case SMA_LogAndPopup:
          TryLogWindow = YUP;
-         SUMA_PopUpMessage (MD);
+         if(SUMA_isEnv("SUMA_SHOWPOPUPS","y"))
+            SUMA_PopUpMessage (MD);
          break;
       default:
          break;
@@ -3563,9 +3564,11 @@ char *SUMA_help_IO_Args(SUMA_GENERIC_ARGV_PARSE *opt)
 "               Those templates must be installed under this directory:\n"
 "                 %s\n"
 "               If you have no surface templates there, download\n"
-"                 http:afni.nimh.nih.gov:/pub/dist/tgz/suma_MNI_N27.tgz\n"
+"                 https://afni.nimh.nih.gov/pub/dist/tgz/suma_MNI_N27.tgz\n"
 "               and/or\n"
-"                 http:afni.nimh.nih.gov:/pub/dist/tgz/suma_TT_N27.tgz\n"
+"                 https://afni.nimh.nih.gov/pub/dist/tgz/suma_TT_N27.tgz\n"
+"               and/or\n"
+"                 https://afni.nimh.nih.gov/pub/dist/tgz/suma_MNI152_2009.tgz\n"
 "               and untar them under directory %s\n"
 "     DENSITY: Use if you want to load standard-mesh versions of the template\n"
 "              surfaces. Note that only ld20, ld60, ld120, and ld141 are in\n"

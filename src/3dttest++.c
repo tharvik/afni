@@ -16,6 +16,12 @@ void regress_toz( int numA , float *zA ,
 float_pair ttest_toz( int numx, float *xar, int numy, float *yar, int opcode,
                       float *xres, float *yres ) ;
 
+float_pair ttest_boot_1sam( int nx , float *xx , float *xres ) ; /* 11 Oct 2017 */
+
+static int do_boot = 0 ;
+
+#define MIN_boot 11
+
 /*----- similar funcs for the case of -singletonA -----*/
 
 void regress_toz_singletonA( float zA ,
@@ -32,6 +38,8 @@ float_pair ttest_toz_singletonA( float xar, int numy, float *yar, float *xres, f
 /*----- convert t-stat to z-score -----*/
 
 double GIC_student_t2z( double tt , double dof ) ;
+static double GIC_qginv( double p ) ;
+static double zthresh( double pval ) ;
 
 /*----- setup the covariates matrices -----*/
 
@@ -40,11 +48,20 @@ void TT_matrix_setup( int kout ) ;  /* 30 Jul 2010 */
 /*----- macro to truncate labels -----*/
 
 #undef  MAX_LABEL_SIZE
-#define MAX_LABEL_SIZE 12
+#define MAX_LABEL_SIZE   256
+
+#undef  MAX_SETNAME_SIZE
+#define MAX_SETNAME_SIZE 12
+
+#undef  GTRUNC
+#define GTRUNC(ss,lll) \
+ do{ if( strlen(ss) > lll ){(ss)[lll] = '\0'; }} while(0)
 
 #undef  LTRUNC
-#define LTRUNC(ss) \
- do{ if( strlen(ss) > MAX_LABEL_SIZE ){(ss)[MAX_LABEL_SIZE] = '\0'; }} while(0)
+#define LTRUNC(ssss) GTRUNC(ssss,MAX_LABEL_SIZE)
+
+#undef  STRUNC
+#define STRUNC(ssss) GTRUNC(ssss,MAX_SETNAME_SIZE)
 
 /*----- macro for some memory usage info -----*/
 
@@ -183,6 +200,7 @@ typedef struct {
   float *pthr ;
   float farp_goal ;
   char name[32] ;
+  char mode[32] ; /* 10 Jan 2018 */
 } Xclu_opt ;
 
 /* lines directly below copied from 3dXClustSim.c:
@@ -195,6 +213,9 @@ static int    do_ETACmem   = 0 ;    /* 22 Aug 2017 */
 static int     nnopt_Xclu  = 0 ;
 static Xclu_opt **opt_Xclu = NULL ;
 static char *Xclu_arg      = NULL ; /* 10 Sep 2016 */
+
+static int do_global_etac  = 1 ;    /* Sep 2018 */
+static int do_local_etac   = 1 ;
 
 static char *clustsim_prog = NULL ; /* 30 Aug 2016 */
 static char *clustsim_opt  = NULL ;
@@ -529,8 +550,16 @@ void display_help_menu(void)
       "   LABL_K    is the label for the Kth input dataset name, whose name follows.\n"
       "   BETA_DSET is the name of the dataset of the beta coefficient or GLT.\n"
       "             ++ only 1 sub-brick can be specified here!\n"
-      "   Note that the labels 'SETNAME' and 'LABL_K' are limited to 12\n"
-      "   characters -- any more will be thrown away without warning.\n"
+      "    ** Note that the label 'SETNAME' is limited to %d characters,\n"
+      "       and the labels 'LABL_K' are limited to %d characters\n"
+      "       -- any more will be thrown away without warning.\n"
+      "    ** Only the first %d characters of the covariate labels can be\n"
+      "       used in the sub-brick labels, due to limitations in the AFNI\n"
+      "       dataset structure and AFNI GUI. Any covariate labels longer than\n"
+      "       this will be truncated when put into the output dataset :(\n"
+         ,  MAX_SETNAME_SIZE , MAX_LABEL_SIZE , MAX_SETNAME_SIZE
+   ) ;
+   printf(
       "\n"
       "     ** The program determines if you are using the short form or long **\n"
       "     ** form to specify the input datasets based on the first argument **\n"
@@ -1068,7 +1097,9 @@ void display_help_menu(void)
       "              ++ The residuals are the difference between the data values\n"
       "                 and their prediction from the set mean (and set covariates).\n"
       "              ++ For use in further analysis of the results (e.g., 3dFWHMx).\n"
-      "              ++ Cannot be used with '-brickwise' or '-zskip' (sorry).\n"
+      "              ++ Cannot be used with '-brickwise' (sorry).\n"
+      "              ++ If used with '-zskip', values which were skipped in the\n"
+      "                 analysis will get residuals set to zero.\n"
       "\n"
       " -ACF      = If residuals are saved, also compute the ACF parameters from\n"
       "             them using program 3dFHWMx -- for further use in 3dClustSim\n"
@@ -1103,12 +1134,12 @@ void display_help_menu(void)
       "Then the 3dClustSim program (for -Clustsim) and 3dXClustSim program (for -ETAC)\n"
       "use multi-threaded processing to carry out their clusterization statistics.\n"
       "If your computer does NOT have multiple CPU cores, then these options will\n"
-      "run very slowly.\n"
+      "run very very slowly.\n"
       "\n"
 #ifdef ALLOW_BOTH_CLUSTIMS
       "You can use both -ETAC and -Clustsim in the same run. The main reason for\n"
       "doing this is to compare the results of the two methods. Using both methods\n"
-      "in one 3dttest++ run will be very slow.\n"
+      "in one 3dttest++ run will be super slow.\n"
       " ++ In such a dual-use case, and if '-ETAC_blur' is also given, note that\n"
       "     3dClustSim will be run once for each blur level, giving a set of cluster-\n"
       "     size threshold tables for each blur case. This process is necessary since\n"
@@ -1181,7 +1212,11 @@ void display_help_menu(void)
       "                   set csize = `1dcat Fred.NN1_1sided.1D\"{10}[6]\"`\n"
       "                 to pick out the number in the #10 row, #6 column (counting\n"
       "                 from #0), which is the p=0.010 FPR=0.05 entry in the table.\n"
-      "                 (-: Further adventures in scripting I leave to your whimsy :-)\n"
+      "          -->++  Or even *better* now for extracting a table value:\n"
+      "                 a clever person added command line options to 1d_tool.py\n"
+      "                 to extract a value from the table having a voxelwise p-value\n"
+      "                 ('-csim_pthr ..') and an FDR alpha level ('-csim_alpha ..').\n"
+      "                 Be sure to check out those options in 1d_tool.py's help!\n"
       "\n"
       "  ---==>>> PLEASE NOTE: This option has been tested for 1- and 2-sample\n"
       "  ---==>>> unpaired and paired tests vs. resting state data -- to see if the\n"
@@ -1194,10 +1229,15 @@ void display_help_menu(void)
       " -prefix_clustsim cc = Use 'cc' for the prefix for the '-Clustsim' temporary\n"
       "                       files, rather than a randomly generated prefix.\n"
       "                       You might find this useful if scripting.\n"
+#if 0
       "                      ++ The default randomly generated prefix will start with\n"
       "                         'TT.' and be followed by 11 alphanumeric characters,\n"
       "                         as in 'TT.Sv0Ghrn4uVg'.  To mimic this, you might\n"
       "                         use something like '-prefix_clustsim TT.Zhark'.\n"
+#else
+      "                      ++ By default, the Clustsim (and ETAC) prefix will\n"
+      "                         be the same as that given by '-prefix'.\n"
+#endif
       "                  -->>++ If you use option '-Clustsim', then the simulations\n"
       "                         keep track of the maximum (in mask) voxelwise\n"
       "                         z-statistic, compute the threshold for 5%% global FPR,\n"
@@ -1207,8 +1247,7 @@ void display_help_menu(void)
       "                         threshold in the AFNI GUI will (presumably) give you\n"
       "                         a map with a 5%% chance of false positive WITHOUT\n"
       "                         clustering. Of course, these thresholds generally come\n"
-      "                         with a very stringent per-voxel\n"
-      "                         p-value.\n"
+      "                         with a VERY stringent per-voxel p-value.\n"
       "                        ** In one analysis, the 5%% 2-sided test FPR p-value was\n"
       "                           about 7e-6 for a mask of 43000 voxels, which is\n"
       "                           bigger (less strict) than the 1.2e-6 one would get\n"
@@ -1216,6 +1255,14 @@ void display_help_menu(void)
       "                           stringent for many purposes. This threshold value\n"
       "                           was also close to the threshold at which the FDR\n"
       "                           q=1/43000, which may not be a coincidence.\n"
+#if 0
+      "                  -->>++ It is perfectly legal to use the same string here\n"
+      "                         as given in the '-prefix' option.\n"
+#endif
+      "                  -->>++ This file has been updated to give the voxel-wise\n"
+      "                         statistic threshold for global FPRs from 1%% to 9%%.\n"
+      "                         However, the name is still '.5percent.txt' for the\n"
+      "                         sake of nostalgia.\n"
       "\n"
       " -no5percent         = Don't output the 'cc'.5percent.txt file that comes\n"
       "                       for free with '-Clustsim' and/or '-ETAC'.\n"
@@ -1359,6 +1406,32 @@ void display_help_menu(void)
       "                          to be used after the '-ETAC' option, or let the\n"
       "                          program figure out how many to use.\n"
       "\n"
+      " -ETAC_global         = Do the ETAC calculations 'globally' - that is, produce\n"
+      "                        multi-threshold values to apply to the entire volume\n"
+      "                        rather than voxelwise.\n"
+      "                       ++ These global calculations are kind of like '-Clustsim'\n"
+      "                          in that they produce a set of cluster thresholds to\n"
+      "                          apply everywhere in the brain - a small set of numbers.\n"
+      "                          The difference from '-Clustsim' is that for a given FPR,\n"
+      "                          the set of cluster threshold values are intended to\n"
+      "                          be applied simultaneously.\n"
+      "                       ++ These output thresholds are stored in text files\n"
+      "                          (using an XML format) with a name like\n"
+      "                            globalETAC.mthresh.{PREFIX}.{CASE}.{FPR}.niml\n"
+      "\n"
+      " -ETAC_local          = Do the ETAC calculations 'locally' - that is, produce\n"
+      "                        3D datasets with voxelwise cluster multi-threshold.\n"
+      "                       ++ At the present time, the default is to do BOTH\n"
+      "                          local and global calculations, but in the future\n"
+      "                          this default may change unpredictably!\n"
+      "\n"
+      " -noETAC_global       = Turn off the 'global' ETAC calculations.\n"
+      " -noETAC_local        = Turn off the 'local' ETAC calculations.\n"
+      "                       ++ If you turn them both off, then you are not doing ETAC!\n"
+      "                       ++ You can also control these local/global settings by\n"
+      "                          setting these Unix environment variables to YES or NO:\n"
+      "                            AFNI_XCLUSTSIM_GLOBAL  and  AFNI_XCLUSTSIM_LOCAL\n"
+      "\n"
       " -ETAC_mem            = This option tells the program to print out the\n"
       "                        estimate of how much memory is required by the ETAC\n"
       "                        run ordered, and then stop.\n"
@@ -1395,7 +1468,7 @@ void display_help_menu(void)
       "                    NN=1 or NN=2 or NN=3 } spatial connectivity for clustering\n"
       "                    sid=1 or sid=2       } 1-sided or 2-sided t-tests\n"
       "                    pthr=p1,p2,...       } list of p-values to use\n"
-      "                    hpow=h1,h2,...       } list of H powers to use\n"
+      "                    hpow=h1,h2,...       } list of H powers (0, 1, and/or 2)\n"
       "                    fpr=value            } FPR goal, between 2 and 9 (percent)\n"
       "                                         } - must be an integer\n"
       "                                         } - or the word 'ALL' to output\n"
@@ -1432,33 +1505,64 @@ void display_help_menu(void)
       "                        There is almost no reason to use this option that I\n"
       "                        can think of, except perhaps this example:\n"
       "                          -ETAC_arg -verb\n"
-      "                        which will cause 3dXClustSim to print more verbose\n"
+      "                        which will cause 3dXClustSim to print more fun fun fun\n"
       "                        information as it progresses through the ETAC stages.\n"
       "\n"
-      "The output of ETAC computations (in 3dXClustSim) is a set of multi-threshold\n"
-      "maps that can be used with program 3dMultiThresh to be applied to the 3dttest++\n"
-      "main statistical output. One such 'mthresh' map is computed for each blurring\n"
-      "case.\n"
+      "-----------------\n"
+      "ETAC Output Files\n"
+      "-----------------\n"
+      "ETAC produces a number of output files. Some of these are the multi-threshold\n"
+      "datasets that can be used with program 3dMultiThresh to get thresholded\n"
+      "results. Others of these are a binary mask that indicate which voxels passed\n"
+      "these at least one of the multiple tests, and another mask that indicates\n"
+      "which tests were passed (in each voxel). These masks are produced by running\n"
+      "3dMultiThresh for each blur case, then combining the results across blur cases.\n"
       "\n"
-      "A mask dataset is also computed, which is a dataset that is 0 except where\n"
-      "at least one of the multi-thresholding operations produced a result when\n"
-      "applied to the actual 3dttest++ main results. To be more complete in my\n"
-      "description, different mask datasets will be produced, depending on the\n"
-      "sided-ness of the t-tests specified in '-ETAC_opt'. In the filenames below,\n"
-      "'P' refers to '-prefix_clustsim' and 'N' refers to 'name' (in -ETAC_opt):\n"
+      "In the example below, assume\n"
+      "  * Two blurring cases are specified using '-ETAC_blur 4 7'\n"
+      "  * The prefix for normal 3dttest++ files is 'P', as in '-prefix P'\n"
+      "  * The prefix for ETAC output files is 'Px', as in '-prefix_clustsim Px'\n"
+      "  * The name for the ETAC analysis is 'name=N' in option '-ETAC_opt'\n"
+      "    (remember, you can run more than one ETAC analysis in a single 3dttest++)\n"
+      "  * That a 2-sided analysis is ordered with 'sid=2 in option '-ETAC_opt'\n"
+      "  * The default 'fpr=5' is used in option '-ETAC_opt'\n"
       "\n"
-      "  For sid=2 (2-sided t-test thresholding): P.N.ETACmask.2sid.5perc.nii.gz\n"
-      "\n"
-      "  For sid=1 (1-sided t-test thresholding): P.N.ETACmask.1pos.5perc.nii.gz\n"
-      "                                           P.N.ETACmask.1neg.5perc.nii.gz\n"
-      "        (for 1-sided positive and 1-sided negative thresholds, respectively)\n"
-      "\n"
-      "In the ETACmask filenames above, the '5perc' refers to the 5%% FPR goal.\n"
-      "If you use a different FPR goal (in '-ETAC_opt'), this part of the filename\n"
-      "will change to match the new FPR goal.\n"
-      "\n"
-      "*** WARNING: ETAC consumes a lot of CPU time, and a lot of memory ***\n"
-      "***         (especially if many -ETAC_blur cases are used)!       ***\n"
+      "Output filename                     Description and Contents\n"
+      "----------------------------------  -------------------------------------------\n"
+      "P+tlrc.HEAD                         normal 3dttest++ output from input datasets\n"
+      "P.B4.0.nii                          3dttest++ output from blurred datasets\n"
+      "P.B7.0.nii                            (4 and 7 mm, respectively)\n"
+      "Px.B4.0.5percent.txt                voxel-wise threshold list for a variety\n"
+      "Px.B7.0.5percent.txt                  of global FPRs, for blurs 4 and 7\n"
+      "Px.N.ETAC.mthresh.B4.0.5perc.nii    Multi-threshold datasets for blur=4 and =7,\n"
+      "Px.N.ETAC.mthresh.B7.0.5perc.nii      for overall 5%% global false positive rate\n"
+      "Px.N.ETACmask.2sid.5perc.nii.gz     Binary (0 or 1) mask of 'active voxels'\n"
+      "PX.N.ETACmaskALL.2sid.5perc.nii.gz  Multi-volume mask showing which ETAC\n"
+      "                                      sub-method(s) passed in each voxel:\n"
+      "                                      There is one sub-brick per p-value,\n"
+      "                                      per blur case (e.g., 5*2=10), and each\n"
+      "                                      mask value encodes which hpow value(s)\n"
+      "                                      had a positive result, as the sum of\n"
+      "                                        1 == hpow=0 passed\n"
+      "                                        2 == hpow=1 passed\n"
+      "                                        4 == hpow=2 passed\n"
+      "                                      Sub-bricks in this dataset will have\n"
+      "                                      labels of the form\n"
+      "                                        'B4.0:p=0.0100'\n"
+      "                                      indicating the sub-method was blur=4\n"
+      "                                      with pthr=0.01.\n"
+      "* If a different 'fpr' value was given (say 2), then the filenames containing\n"
+      "  'ETAC' will have the '5perc' component changed to that value (e.g., '4perc').\n"
+      "* If 'fpr=ALL', there would be outputs for '2perc', '3perc', ... '9perc'.\n"
+      "* If 'sid=1' were given in '-ETAC_opt', then each mask filename containing\n"
+      "  '2sid' will instead be replaced by TWO files, one with '1neg' and one\n"
+      "  with '1pos', indicating the results of 1-sided t-test thresholding with\n"
+      "  the negative and positive sides, respectively.\n"
+      "* It is quite possible that the various ETACmask files are all zero,\n"
+      "  indicating that nothing survived the multi-thresholding operations.\n"
+      "-----------\n"
+      "*** WARNING: ETAC consumes a lot of CPU time, and a lot of memory  ***\n"
+      "***         (especially with many -ETAC_blur cases, or 'fpr=ALL')! ***\n"
       "\n"
       "+++ (: One of these days, I'll expand this section and explain ETAC more :) +++\n"
       "+++ (: ------------------------------ MAYBE ---------------------------- :) +++\n"
@@ -2056,6 +2160,13 @@ int main( int argc , char *argv[] )
    debug = AFNI_yesenv("AFNI_DEBUG") ;
    dryrun = AFNI_yesenv("AFNI_DRYRUN") ;
 
+   /* Initialize global/local ETAC calculations [Sep 2018] */
+
+   if( AFNI_yesenv("AFNI_XCLUSTSIM_GLOBAL") ) do_global_etac = 1 ;
+   if( AFNI_yesenv("AFNI_XCLUSTSIM_LOCAL")  ) do_local_etac  = 1 ;
+   if( AFNI_noenv ("AFNI_XCLUSTSIM_GLOBAL") ) do_global_etac = 0 ;
+   if( AFNI_noenv ("AFNI_XCLUSTSIM_LOCAL")  ) do_local_etac  = 0 ;
+
    while( nopt < argc ){
 
      if( debug ) INFO_message("=== argv[%d] = %s",nopt,argv[nopt]) ;
@@ -2264,9 +2375,13 @@ int main( int argc , char *argv[] )
          ININFO_message("   where you replace the 'N' with the number of CPUs.") ;
        }
        if( prefix_clustsim == NULL ){
+#if 0
          uuu = UNIQ_idcode_11() ;
          prefix_clustsim = (char *)malloc(sizeof(char)*32) ;
          sprintf(prefix_clustsim,"TT.%s",uuu) ;
+#else
+         prefix_clustsim = strdup(prefix) ; /* 22 Feb 2018 */
+#endif
          ININFO_message("Default clustsim prefix set to '%s'",prefix_clustsim) ;
        }
        continue ;
@@ -2325,6 +2440,21 @@ int main( int argc , char *argv[] )
        continue ;
      }
 
+     /*-----  local and global ETAC [Sep 2018]  -----*/
+
+     if( strcasecmp(argv[nopt],"-ETAC_local") == 0 ){
+       do_local_etac = 1 ; nopt++ ; continue ;
+     }
+     if( strcasecmp(argv[nopt],"-ETAC_global") == 0 ){
+       do_global_etac = 1 ; nopt++ ; continue ;
+     }
+     if( strcasecmp(argv[nopt],"-noETAC_local") == 0 ){
+       do_local_etac = 0 ; nopt++ ; continue ;
+     }
+     if( strcasecmp(argv[nopt],"-noETAC_global") == 0 ){
+       do_global_etac = 0 ; nopt++ ; continue ;
+     }
+
      /*-----  -ETAC_mem [22 Aug 2017]  -----*/
 
      if( strncasecmp(argv[nopt],"-ETAC_mem",10) == 0 ){
@@ -2347,12 +2477,12 @@ int main( int argc , char *argv[] )
        opx->pthr      = NULL ;
        opx->farp_goal = 5.0f ;
        opx->do_hpow0  = 0 ; opx->do_hpow1 = 0 ; opx->do_hpow2 = 0 ;
+       opx->mode[0]   = '\0' ; /* 10 Jan 2018 */
        sprintf(opx->name,"Case%d",nnopt_Xclu+1) ;
 
        acp = strdup(argv[nopt]) ;  /* change colons to blanks */
        for( cpt=acp ; *cpt != '\0' ; cpt++ ){
-              if( *cpt == ':' ) *cpt = ' ' ;
-         else if( *cpt == '%' ) *cpt = ' ' ;
+         if( *cpt == ':' ) *cpt = ' ' ;
        }
 
        cpt = strcasestr(acp,"NN1") ; if( cpt != NULL ) opx->nnlev = 1 ;
@@ -2433,6 +2563,17 @@ int main( int argc , char *argv[] )
            ERROR_message("Illegal string after name= in '%s %s'",thisopt,argv[nopt]); nbad++ ;
          } else {
            MCW_strncpy(opx->name,nam,32) ;
+         }
+       }
+
+       cpt = strcasestr(acp,"mode=") ;      /* 10 Jan 2018 */
+       if( cpt != NULL && cpt[5] != '\0' ){
+         char mode[128] ; mode[0] = '\0' ;
+         sscanf(cpt+5," %s",mode) ;
+         if( strlen(mode) == 0 || strlen(mode) > 31 || !THD_filename_pure(mode) ){
+           ERROR_message("Illegal string after name= in '%s %s'",thisopt,argv[nopt]); nbad++ ;
+         } else {
+           MCW_strncpy(opx->mode,mode,32) ;
          }
        }
 
@@ -2673,17 +2814,21 @@ int main( int argc , char *argv[] )
        toz = 1 ; nopt++ ; continue ;
      }
 
+     if( strcasecmp(argv[nopt],"-bootstrap") == 0 ){ /* HIDDEN */
+       do_boot = 1 ; nopt++ ; continue ;
+     }
+
      if( strcasecmp(argv[nopt],"-labelA") == 0 ){
        if( ++nopt >= argc )
          ERROR_exit("Need argument after '%s'",argv[nopt-1]) ;
-       lnam_AAA = strdup(argv[nopt]) ; LTRUNC(lnam_AAA) ;
+       lnam_AAA = strdup(argv[nopt]) ; STRUNC(lnam_AAA) ;
        nopt++ ; continue ;
      }
 
      if( strcasecmp(argv[nopt],"-labelB") == 0 ){
        if( ++nopt >= argc )
          ERROR_exit("Need argument after '%s'",argv[nopt-1]) ;
-       lnam_BBB = strdup(argv[nopt]) ; LTRUNC(lnam_BBB) ;
+       lnam_BBB = strdup(argv[nopt]) ; STRUNC(lnam_BBB) ;
        nopt++ ; continue ;
      }
 
@@ -2779,7 +2924,7 @@ int main( int argc , char *argv[] )
              "-set%c: LONG form group label '%s' looks like a dataset name but isn't -- is this OK ?!?",
              cc , argv[nopt] ) ;
 
-         snam = strdup(argv[nopt]) ; LTRUNC(snam) ;
+         snam = strdup(argv[nopt]) ; STRUNC(snam) ;
          for( nopt++ ; nopt < argc && argv[nopt][0] != '-' ; nopt+=2 ){
            if( nopt+1 >= argc || argv[nopt+1][0] == '-' ){
              ERROR_exit(
@@ -3120,6 +3265,11 @@ int main( int argc , char *argv[] )
      ERROR_exit("You can't use -Clustsim and -ETAC/-Xclustsim together /:(") ;
 #endif
 
+   if( do_Xclustsim && ( !do_local_etac && !do_global_etac) ){ /* Sep 2018 */
+     WARNING_message("local and global ETAC are both turned off - disabling -ETAC :(") ;
+     do_Xclustsim = 0 ;
+   }
+
    if( nnopt_Xclu > 0 && !do_Xclustsim )
      ERROR_exit("You can't use -ETAC_opt/-Xclu_opt without -ETAC/-Xclustsim /:( !!") ;
 
@@ -3210,6 +3360,13 @@ int main( int argc , char *argv[] )
      ERROR_exit("You didn't use one of -setA or -singletonA /:(") ;
 
    twosam = (nval_BBB > 1) ; /* 2 sample test? */
+
+   if( twosam && do_boot )
+     ERROR_exit("-bootstrap and 2-sample tests NOT IMPLEMENTED YET :(") ;
+   if( do_boot && ttest_opcode != 0 )
+     ERROR_exit("-bootstrap and weird opcodes NOT IMPLEMENTED YET :(") ;
+   if( do_boot && nval_AAA < MIN_boot )
+     ERROR_exit("-bootstrap needs at least %d samples :(",MIN_boot) ;
 
    if( singletonA && !twosam )
      ERROR_exit("-singletonA was used, but -setB was not: this makes no sense!") ;
@@ -3315,8 +3472,10 @@ int main( int argc , char *argv[] )
      do_ACF = 0 ;
    }
 
+#if 0  /* now allowed [26 Sep 2017] */
    if( do_zskip && do_resid )  /* 31 Dec 2015 */
      ERROR_exit("You can't use -resid and -zskip together /:(") ;
+#endif
 
    /* check lower limits on dataset counts if doing randomization stuff */
 
@@ -3333,6 +3492,9 @@ int main( int argc , char *argv[] )
    if( do_Xclustsim && nval_AAA+nval_BBB < 14 )
      ERROR_exit("You can't use %s in a 2-sample test with nval_AAA+nval_BBB=%d < 14",
                 clustsim_opt,nval_AAA+nval_BBB) ;
+
+   if( (do_Xclustsim || do_clustsim) && singletonA )  /* 21 Nov 2017 */
+     ERROR_exit("You can't use -singletonA with -Clustsim OR with -ETAC :(") ;
 
    if( do_clustsim && nval_AAA < 4 )
      ERROR_exit("You can't use %s with nval_AAA=%d < 4",clustsim_opt,nval_AAA) ;
@@ -3594,8 +3756,9 @@ int main( int argc , char *argv[] )
                ERROR_message("Can't assemble dataset vectors for covariate #%d",jj+1) ;
                nbad++ ;
              } else {
-               sprintf(msg,"3dttest++ -setB covariate #%d",jj+1) ;
-               THD_check_vectim(covvim_BBB[jj],msg) ;
+               /* B/BBB -> A/AAA        20 Sep 2018 [rickr] */
+               sprintf(msg,"3dttest++ -setA covariate #%d",jj+1) ;
+               THD_check_vectim(covvim_AAA[jj],msg) ;
              }
            }
            for( kk=0 ; kk < ndset_AAA ; kk++ )       /* tossola la trashola */
@@ -3758,33 +3921,33 @@ int main( int argc , char *argv[] )
   /* mean (effect size) label for 2 sample results */
 
 #undef  MEAN_LABEL_2SAM
-#define MEAN_LABEL_2SAM(npp,nmm,lll)                         \
- do{ sprintf(blab,"%s-%s_%s",npp,nmm,lll); ADD_BRICK_INDEX;  \
-     EDIT_BRICK_LABEL(outset,ss+bbase,blab);                 \
+#define MEAN_LABEL_2SAM(npp,nmm,lll)                                  \
+ do{ sprintf(blab,"%.12s-%.12s_%.12s",npp,nmm,lll); ADD_BRICK_INDEX;  \
+     EDIT_BRICK_LABEL(outset,ss+bbase,blab);                          \
      ss++; } while(0)
 
   /* mean label for 1 sample results */
 
-#define MEAN_LABEL_1SAM(nnn,lll)                     \
- do{ sprintf(blab,"%s_%s",nnn,lll); ADD_BRICK_INDEX; \
-     EDIT_BRICK_LABEL(outset,ss+bbase,blab);         \
+#define MEAN_LABEL_1SAM(nnn,lll)                           \
+ do{ sprintf(blab,"%.12s_%.12s",nnn,lll); ADD_BRICK_INDEX; \
+     EDIT_BRICK_LABEL(outset,ss+bbase,blab);               \
      ss++; } while(0)
 
   /* test statistic for 2 sample results, covariates label */
 
 #undef  TEST_LABEL_2SAM_COV
-#define TEST_LABEL_2SAM_COV(npp,nmm,lll)                      \
- do{ sprintf(blab,"%s-%s_%s_%s",npp,nmm,lll,stnam) ;          \
-     ADD_BRICK_INDEX; EDIT_BRICK_LABEL(outset,ss+bbase,blab); \
-     if( toz ) EDIT_BRICK_TO_FIZT(outset,ss+bbase) ;          \
-     else      EDIT_BRICK_TO_FITT(outset,ss+bbase,dof_AB) ;   \
+#define TEST_LABEL_2SAM_COV(npp,nmm,lll)                         \
+ do{ sprintf(blab,"%.12s-%.12s_%.12s_%.12s",npp,nmm,lll,stnam) ; \
+     ADD_BRICK_INDEX; EDIT_BRICK_LABEL(outset,ss+bbase,blab);    \
+     if( toz ) EDIT_BRICK_TO_FIZT(outset,ss+bbase) ;             \
+     else      EDIT_BRICK_TO_FITT(outset,ss+bbase,dof_AB) ;      \
      ss++; } while(0)
 
   /* test statistic for 2 sample results, mean label */
 
 #undef  TEST_LABEL_2SAM_MEAN
 #define TEST_LABEL_2SAM_MEAN(npp,nmm)                         \
- do{ sprintf(blab,"%s-%s_%s",npp,nmm,stnam) ;                 \
+ do{ sprintf(blab,"%.12s-%.12s_%.12s",npp,nmm,stnam) ;        \
      ADD_BRICK_INDEX; EDIT_BRICK_LABEL(outset,ss+bbase,blab); \
      if( toz ) EDIT_BRICK_TO_FIZT(outset,ss+bbase) ;          \
      else      EDIT_BRICK_TO_FITT(outset,ss+bbase,dof_AB) ;   \
@@ -3794,7 +3957,7 @@ int main( int argc , char *argv[] )
 
 #undef  TEST_LABEL_1SAM_COV
 #define TEST_LABEL_1SAM_COV(nnn,lll,ddd)                      \
- do{ sprintf(blab,"%s_%s_%s",nnn,lll,stnam) ;                 \
+ do{ sprintf(blab,"%.12s_%.12s_%.12s",nnn,lll,stnam) ;        \
      ADD_BRICK_INDEX; EDIT_BRICK_LABEL(outset,ss+bbase,blab); \
      if( toz ) EDIT_BRICK_TO_FIZT(outset,ss+bbase) ;          \
      else      EDIT_BRICK_TO_FITT(outset,ss+bbase,ddd) ;      \
@@ -3804,7 +3967,7 @@ int main( int argc , char *argv[] )
 
 #undef  TEST_LABEL_1SAM_MEAN
 #define TEST_LABEL_1SAM_MEAN(nnn,ddd)                         \
- do{ sprintf(blab,"%s_%s",nnn,stnam) ;                        \
+ do{ sprintf(blab,"%.12s_%.12s",nnn,stnam) ;                  \
      ADD_BRICK_INDEX; EDIT_BRICK_LABEL(outset,ss+bbase,blab); \
      if( toz ) EDIT_BRICK_TO_FIZT(outset,ss+bbase) ;          \
      else      EDIT_BRICK_TO_FITT(outset,ss+bbase,ddd) ;      \
@@ -3978,10 +4141,14 @@ LABELS_ARE_DONE:  /* target for goto above */
    vstep = (nmask_hits > 6666) ? nmask_hits/50 : 0 ;
    if( brickwise_num > 1 ){
      vstep = 0 ; bstep = brickwise_num/50 ; if( bstep == 0 ) bstep = 1 ;
-     if( do_randomsign )
-       fprintf(stderr,"++ t-test randomsign:") ;
-     else
+     if( do_randomsign ){
+       if( do_permute )
+         fprintf(stderr,"++ t-test randomsign/permute:") ;
+       else
+         fprintf(stderr,"++ t-test randomsign:") ;
+     } else {
        fprintf(stderr,"++ t-test brickwise:") ;
+     }
    } else {
      bstep =0 ;
    }
@@ -4100,6 +4267,8 @@ LABELS_ARE_DONE:  /* target for goto above */
 
        if( mcov == 0 ){  /*--- no covariates ==> standard t-tests ---*/
          float *zAAA=datAAA, *zBBB=datBBB ; int nAAA=nval_AAA, nBBB=nval_BBB, nz,qq ;
+         float *rAAA=Aresid, *rBBB=Bresid ; /* 26 Sep 2017 */
+         int   *iAAA=NULL  , *iBBB=NULL , fix_resid=0 ;
 
          if( do_zskip ){  /* 06 Oct 2010: skip zero values? */
            if( !singletonA ){
@@ -4107,9 +4276,11 @@ LABELS_ARE_DONE:  /* target for goto above */
              if( nz > 0 ){            /* copy nonzero vals to a new array */
                nAAA = nval_AAA - nz ;
                if( nAAA < zskip_AAA ){ kout++ ; nzskip++ ; continue ; }
-               zAAA = (float *)malloc(sizeof(float)*nAAA) ;
+               zAAA = (float *)calloc(sizeof(float),nAAA) ;
+               iAAA = (int   *)calloc(sizeof(int)  ,nAAA) ;
+               if( do_resid ){ rAAA = (float *)calloc(sizeof(float),nAAA); fix_resid++; }
                for( ii=qq=0 ; ii < nval_AAA ; ii++ )
-                 if( datAAA[ii] != 0.0f ) zAAA[qq++] = datAAA[ii] ;
+                 if( datAAA[ii] != 0.0f ){ iAAA[qq] = ii; zAAA[qq++] = datAAA[ii]; }
              }
            }
            if( twosam ){
@@ -4120,13 +4291,15 @@ LABELS_ARE_DONE:  /* target for goto above */
                  if( zAAA != datAAA && zAAA != NULL ) free(zAAA) ;
                  kout++ ; nzskip++ ; continue ;
                }
-               zBBB = (float *)malloc(sizeof(float)*nBBB) ;
+               zBBB = (float *)calloc(sizeof(float),nBBB) ;
+               iBBB = (int   *)calloc(sizeof(int)  ,nBBB) ;
+               if( do_resid ){ rBBB = (float *)calloc(sizeof(float),nBBB); fix_resid++; }
                for( ii=qq=0 ; ii < nval_BBB ; ii++ )
-                 if( datBBB[ii] != 0.0f ) zBBB[qq++] = datBBB[ii] ;
+                 if( datBBB[ii] != 0.0f ){ iBBB[qq] = ii; zBBB[qq++] = datBBB[ii]; }
              }
            }
            if( (zAAA != datAAA && zAAA != NULL) || (zBBB != datBBB && zBBB != NULL) )
-             nzred++ ;
+             nzred++ ; /* count of reduced cases */
          }
 
          if( twosam ){
@@ -4140,20 +4313,35 @@ LABELS_ARE_DONE:  /* target for goto above */
            if( do_ranks ) rank_order_2floats( nAAA,zAAA , nBBB,zBBB ) ;
 #endif
            if( singletonA ){
-             tpair = ttest_toz_singletonA( zAAA[0] , nBBB,zBBB , Aresid,Bresid ) ;
+             tpair = ttest_toz_singletonA( zAAA[0] , nBBB,zBBB , rAAA,rBBB ) ;
            } else {
-             tpair = ttest_toz( nAAA,zAAA , nBBB,zBBB , ttest_opcode , Aresid,Bresid) ; /* 2 sample A-B */
+             tpair = ttest_toz( nAAA,zAAA , nBBB,zBBB , ttest_opcode , rAAA,rBBB) ; /* 2 sample A-B */
            }
            resar[0] = tpair.a ; resar[1] = tpair.b ;
            if( debug > 1 ) fprintf(stderr,"   resar[0]=%g  [1]=%g\n",resar[0],resar[1]) ;
          } else {
-           tpair = ttest_toz( nAAA,zAAA , 0 ,NULL   , ttest_opcode , Aresid,NULL ) ; /* 1 sample setA */
+           if( do_boot )
+             tpair = ttest_boot_1sam( nAAA,zAAA,rAAA ) ; /* 11 Oct 2017 */
+           else
+             tpair = ttest_toz( nAAA,zAAA, 0,NULL, ttest_opcode, rAAA,NULL ) ; /* 1 sample setA */
            resar[0] = tpair.a ; resar[1] = tpair.b ;
            if( debug > 1 ) fprintf(stderr,"   resar[0]=%g  [1]=%g\n",resar[0],resar[1]) ;
          }
+         if( fix_resid ){ /* 26 Sep 2017 */
+           if( nAAA < nval_AAA && rAAA != NULL && rAAA != Aresid ){
+             for( qq=0 ; qq < nAAA ; qq++ ) Aresid[iAAA[qq]] = rAAA[qq] ;
+           }
+           if( nBBB < nval_BBB && rBBB != NULL && rBBB != Bresid ){
+             for( qq=0 ; qq < nBBB ; qq++ ) Bresid[iBBB[qq]] = rBBB[qq] ;
+           }
+         }
 
-         if( zBBB != datBBB && zBBB != NULL ) free(zBBB) ;
          if( zAAA != datAAA && zAAA != NULL ) free(zAAA) ;
+         if( zBBB != datBBB && zBBB != NULL ) free(zBBB) ;
+         if( rAAA != Aresid && rAAA != NULL ) free(rAAA) ;
+         if( rBBB != Bresid && rBBB != NULL ) free(rBBB) ;
+         if( iAAA != NULL )                   free(iAAA) ;
+         if( iBBB != NULL )                   free(iBBB) ;
 
        } else {          /*--- covariates ==> regression analysis ---*/
 
@@ -4370,14 +4558,14 @@ LABELS_ARE_DONE:  /* target for goto above */
    /*----------------- Cluster Simulation now [10 Feb 2016] -----------------*/
    /*------------------------------------------------------------------------*/
 
-   if( do_clustsim || do_Xclustsim ){
+   if( do_clustsim || do_Xclustsim ){  /* this will take a while */
 
      char fname[1024] , *cmd , *ccc ; int qq,pp , nper ; double ct1,ct2 ;
      int ncsim , ncase , icase ; float cblur ;
      int use_sdat ;
      char **tfname=NULL  , *bmd=NULL  , *qmd=NULL ;
      char   bprefix[1024], **clab=NULL, **cprefix=NULL ;
-     int ncmin = (do_Xclustsim) ? 40000 : 10000 ;
+     int ncmin = (do_Xclustsim && do_local_etac) ? 30000 : 10000 ;
 
      use_sdat = do_Xclustsim ||
                 ( name_mask != NULL && !AFNI_yesenv("AFNI_TTEST_NIICSIM") ) ;
@@ -4394,7 +4582,7 @@ LABELS_ARE_DONE:  /* target for goto above */
      clab    = (char **)malloc(sizeof(char *)*ncase) ;
      cprefix = (char **)malloc(sizeof(char *)*ncase) ;
 
-     /* cmd = command for randomize/permute 3dttest++ runs */
+     /* cmd = space for command to randomize/permute 3dttest++ runs */
 
      cmd  = (char *)malloc(sizeof(char)*(32768+mcov*256+(nval_AAA+nval_BBB)*512)) ;
 
@@ -4402,7 +4590,7 @@ LABELS_ARE_DONE:  /* target for goto above */
 
      tfname = (char **)malloc(sizeof(char *)*num_clustsim*ncase) ;
 
-     /* bmd = command for blurred 3dttest++ runs */
+     /* bmd = space for command to do blurred 3dttest++ runs */
 
      if( do_Xclustsim && Xclu_nblur > 0 ){
        bmd = (char *)malloc(sizeof(char)*(32768+mcov*256+(nval_AAA+nval_BBB)*512)) ;
@@ -4410,7 +4598,7 @@ LABELS_ARE_DONE:  /* target for goto above */
        if( !PREFIX_IS_NIFTI(prefix) ) strcat( bprefix , ".nii" ) ;
      } else {
        cprefix[0] = strdup(DSET_HEADNAME(outset)) ;  /* 04 Aug 2017 */
-INFO_message("cprefix[0] = %s",cprefix[0]) ;
+/* INFO_message("cprefix[0] = %s",cprefix[0]) ; */
      }
 
      /* loop to start randomize jobs */
@@ -4460,6 +4648,8 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
          sprintf( bmd , "3dttest++ -DAFNI_AUTOMATIC_FDR=NO -DAFNI_DONT_LOGFILE=YES \\\n"
                         "    -toz -exblur %.2f" , cblur ) ;
 
+         if( do_boot )
+           sprintf( bmd+strlen(bmd) , " -bootstrap" ) ;
          if( name_mask != NULL )
            sprintf( bmd+strlen(bmd) , " -mask %s",name_mask) ;
          if( ttest_opcode == 1 )
@@ -4526,6 +4716,13 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
          sprintf( cmd+strlen(cmd) , " \\\n   ") ;
 
          if( mcov == 0 ){   /* no covariates == easy peasy (just the sets) */
+
+           if( do_zskip ){ /* 26 Sep 2016 */
+             if( zskip_AAA == zskip_BBB && zskip_AAA > 0 )
+               TT_cprint( cmd , qmd , " -zskip %d" , zskip_AAA ) ;
+             else if( zskip_fff > 0.0f && zskip_fff < 1.0f )
+               TT_cprint( cmd , qmd , " -zskip %.3f" , zskip_fff ) ;
+           }
 
            if( nval_BBB == 0 ){  /* only -setA */
              TT_cprint( cmd , NULL , " -setA %s" , prefix_resid ) ;
@@ -4633,13 +4830,22 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
        INIT_IMARR(inar) ;
        for( pp=0 ; pp < num_clustsim*ncase ; pp++ ){ /* read one from each simulation */
          sprintf(fname,"%s/%s.%04d.minmax.1D",tempdir,prefix_clustsim,pp) ;
-         inim = mri_read_1D(fname) ;
+         inim = mri_read_1D(fname) ; remove(fname) ;
          if( inim == NULL ){  /* should not happen */
-           ERROR_message("Can't read file %s",fname) ; nbad++ ; continue ;
+           WARNING_message("Can't read file %s",fname) ; nbad++ ;
          }
-         ADDTO_IMARR(inar,inim) ; remove(fname) ;
+         ADDTO_IMARR(inar,inim) ;
        }
-       if( nbad == 0 ){                   /* if all files were OK */
+       if( nbad < num_clustsim*ncase ){ /* if at least some files were OK */
+         if( nbad > 0 ){
+           ININFO_message(
+             " %d/%d minmax.1D files failed: will try to proceed with 5percent.txt anyway",
+             nbad , num_clustsim*ncase ) ;
+         } else {
+           ININFO_message(
+             " successfully read all %d minmax.1D files; computing 5percent.txt outputs",
+             num_clustsim*ncase ) ;
+         }
          for( icase=0 ; icase < ncase ; icase++ ){
            /* glue this case's minmax results together from a sub-array of images */
            allim = mri_catvol_1D_ab(inar,1,icase*num_clustsim,(icase+1)*num_clustsim-1) ;
@@ -4647,33 +4853,54 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
              int nall=2*allim->nx , n05 ;
              float *allar=MRI_FLOAT_PTR(allim) ;
              float oneside_05 , twoside_05 ; FILE *fp ;
-             int ipp ;
+             int ipp ; double bpval,bzth1,bzth2 ;
 
              for( pp=0 ; pp < nall ; pp++ ) allar[pp] = fabsf(allar[pp]) ;
              qsort_float_rev(nall,allar) ;  /* decreasing order */
 
              sprintf(fname,"%s.%s.5percent.txt",prefix_clustsim,clab[icase]) ;
              fp = fopen(fname,"w") ;
+             if( fp == NULL ){
+               ERROR_message("Unable to open '%s' for output :(",fname) ;
+             }
              INFO_message("3dttest++ ----- Global %% FPR points for simulated z-stats:") ;
 
              for( ipp=9 ; ipp > 0 ; ipp-- ){
-               n05 = (int)rintf(0.01f*ipp*nall) ;
-               twoside_05 = allar[n05] ;      /* ipp% in all cases */
+               bpval = (0.01*ipp)/(double)nmask_hits ;
+               bzth1 = zthresh(bpval) ;
+               bzth2 = zthresh(0.5*bpval) ;
+               n05   = (int)rintf(0.01f*ipp*nall) ;
+               twoside_05 = allar[n05] ;      /* ipp% in all cases (pos and neg) */
                oneside_05 = allar[2*n05] ;    /* 2*ipp% in all cases = ipp% one side */
-               fprintf(stderr,"   %.3f = 1-sided %1d%% FPR %s\n",oneside_05,ipp,clab[icase]) ;
-               fprintf(stderr,"   %.3f = 2-sided %1d%% FPR %s\n",twoside_05,ipp,clab[icase]) ;
+               fprintf(stderr,"   %.3f = 1-sided %1d%% FPR %s [Bonferroni=%.3f]\n",
+                              oneside_05,ipp,clab[icase],bzth1) ;
+               fprintf(stderr,"   %.3f = 2-sided %1d%% FPR %s [Bonferroni=%.3f]\n",
+                              twoside_05,ipp,clab[icase],bzth2) ;
                if( fp != NULL ){
-                 fprintf(fp," %.3f = 1-sided %1d%% FPR\n",oneside_05,ipp) ;
-                 fprintf(fp," %.3f = 2-sided %1d%% FPR\n",twoside_05,ipp) ;
+                 fprintf(fp," %.3f = 1-sided %1d%% FPR [Bonferroni=%.3f]\n",
+                            oneside_05,ipp,bzth1) ;
+                 fprintf(fp," %.3f = 2-sided %1d%% FPR [Bonferroni=%.3f]\n",
+                            twoside_05,ipp,bzth2) ;
                } else if( ipp==9 ){  /* should never happen */
                  WARNING_message("   [for some reason, unable to write above results to a file]") ;
                }
              }
-             fclose(fp) ;
-             ININFO_message("    [above results also in file %s]",fname) ;
+             if( fp != NULL ){
+               fclose(fp) ;
+               ININFO_message("    [above results also in file %s]",fname) ;
+             }
              mri_free(allim) ;
+           } else {
+             WARNING_message("COULD NOT read any .minmax.1D files for case %s!",clab[icase]);
+             ININFO_message ("  ==> no global threshold file %s.%s.5percent.txt :(",
+                             prefix_clustsim,clab[icase]) ;
+             ININFO_message ("  ... this failure does not affect any other Clustim/ETAC results!") ;
            }
          }
+       } else {
+         WARNING_message("COULD NOT read any .minmax.1D files for unknown reasons!") ;
+         ININFO_message ("  ==> no global threshold .5percent.txt files are output  :(") ;
+         ININFO_message ("  ... this failure does not affect any other Clustim/ETAC results!") ;
        }
        DESTROY_IMARR(inar) ;
      } /*-- end of 5percent stuff --*/
@@ -4743,9 +4970,10 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
      if( do_Xclustsim ){ /*----- ETAC -----*/
 
        int ixx , nxx=MAX(nnopt_Xclu,1) ; Xclu_opt *opx ;
-       int nnlev, sid, npthr ; float *pthr ; char *nam ;
+       int nnlev, sid, npthr ; float *pthr ; char *nam , *mod=NULL ;
        int do_hpow0, do_hpow1, do_hpow2 ; float fgoal ;
        int numfarp=1 ; float *flist=NULL ;
+       char gprefix[1024] ;
 
        for( ixx=0 ; ixx < nxx ; ixx++ ){   /* loop over -Xclu_opt cases */
          if( ixx < nnopt_Xclu ){   /* and run 3dXClustSim once for each */
@@ -4755,6 +4983,7 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
            npthr = opx->npthr ;      /* number of threshold */
             pthr = opx->pthr ;       /* threshold array */
            nam   = opx->name ;       /* code name for output */
+           mod   = opx->mode ;       /* 10 Jan 2018 */
            fgoal = opx->farp_goal ;
            do_hpow0 = opx->do_hpow0 ;
            do_hpow1 = opx->do_hpow1 ;
@@ -4762,11 +4991,28 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
          } else {
            nnlev = sid = npthr = 0 ; pthr = NULL ; nam="default" ;
            do_hpow0 = 0 ; do_hpow1 = 0 ; do_hpow2 = 1 ;
-           fgoal = 5.0f ;
+           fgoal = 5.0f ; mod = "\0" ;
          }
 
-         sprintf( cmd , "3dXClustSim -DAFNI_DONT_LOGFILE=YES"
-                        " -prefix %s.%s.ETAC.nii" , prefix_clustsim , nam ) ;
+         /* initialize the 3dXClustSim command with some environment settings */
+
+         sprintf( cmd , "3dXClustSim -DAFNI_DONT_LOGFILE=YES -DAFNI_AUTOGZIP=NO" ) ;
+
+         if( mod != NULL && *mod != '\0' ){  /* 10 Jan 2018 */
+           sprintf( cmd+strlen(cmd) , " -DAFNI_MTHRESH_MODE=%s" , mod ) ;
+         }
+
+         sprintf( cmd+strlen(cmd) , " \\\n   ") ;
+
+         sprintf( cmd+strlen(cmd) , " %s %s \\\n   " ,
+                  do_local_etac  ? "-local"  : "-nolocal"  ,
+                  do_global_etac ? "-global" : "-noglobal"  ) ;   /* Sep 2018 */
+
+         sprintf( cmd+strlen(cmd) ,
+                 " -prefix %s.%s.ETAC.nii" , prefix_clustsim , nam ) ;
+
+         /* save prefix for global threshold .niml files [Sep 2018] */
+         sprintf( gprefix , "globalETAC.mthresh.%s.%s.ETAC" , prefix_clustsim , nam ) ;
 
          if( fgoal > 0.0f ){
            sprintf( cmd+strlen(cmd) , " -FPR %.1f" , fgoal ) ;
@@ -4821,6 +5067,7 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
          } else {
            ININFO_message("3dttest++ ===== starting 3dXClustSim : elapsed = %.1f s",
                           COX_clock_time() ) ;
+
                           /*----------------------------------------------------*/
            system(cmd) ;  /*----- run 3dXClustSim here (will take a while) -----*/
                           /*----------------------------------------------------*/
@@ -4833,57 +5080,153 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
                if( sid == 2 ){
                  INFO_message("3dttest++ ----- merging %d blur cases to make 2-sided activation mask",ncase) ;
                  for( icase=0 ; icase < ncase ; icase++ ){ /* make masks for each blur case */
-                   sprintf( cmd , "3dMultiThresh -quiet -input %s -1tindex 1 -maskonly \\\n   " ,
-                                  cprefix[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.%s.nii" ,
-                                              prefix_clustsim , clab[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
-                                              prefix_clustsim , nam , clab[icase],sfarp ) ;
+                   if( do_local_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
+                                                prefix_clustsim , nam , clab[icase],sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                   if( do_global_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.global.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.%s.niml" ,
+                                                gprefix , clab[icase] , sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.global.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                 }
+                 if( do_local_etac ){
+                   sprintf( cmd ,  /* combine the masks */
+                            "3dmask_tool -input %s.ETACtmask.*.nii -union -prefix %s.%s.ETACmask.2sid.%s.nii.gz" ,
+                            prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the amasks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.2sid.%s.nii.gz %s.ETACamask.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
                    system(cmd) ;
                  }
-                 sprintf( cmd ,  /* combine the masks */
-                          "3dmask_tool -input %s.ETACtmask.*.nii -union -prefix %s.%s.ETACmask.2sid.%s.nii.gz" ,
-                          prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
-                 system(cmd) ;
+                 if( do_global_etac ){
+                   sprintf( cmd ,  /* combine the masks */
+                            "3dmask_tool -input %s.ETACtmask.global.*.nii -union -prefix %s.%s.ETACmask.global.2sid.%s.nii.gz" ,
+                            prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the amasks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.global.2sid.%s.nii.gz %s.ETACamask.global.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
+                   system(cmd) ;
+                 }
                } else {
                  INFO_message("3dttest++ ----- merging %d blur cases to make pos 1-sided activation mask",ncase) ;
                  for( icase=0 ; icase < ncase ; icase++ ){
-                   sprintf( cmd , "3dMultiThresh -quiet -input %s -1tindex 1 -maskonly -pos \\\n   " ,
-                                  cprefix[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.1pos.%s.nii" ,
-                                              prefix_clustsim , clab[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
-                                              prefix_clustsim , nam , clab[icase],sfarp ) ;
+                   if( do_local_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly -pos \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.1pos.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
+                                                prefix_clustsim , nam , clab[icase],sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.1pos.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                   if( do_global_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly -pos \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.global.1pos.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.%s.niml" ,
+                                                gprefix , clab[icase] , sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.global.1pos.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                 }
+                 if( do_local_etac ){
+                   sprintf( cmd ,
+                            "3dmask_tool -input %s.ETACtmask.1pos.*.nii -union -prefix %s.%s.ETACmask.1pos.%s.nii.gz" ,
+                            prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the masks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.1pos.%s.nii.gz %s.ETACamask.1pos.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
                    system(cmd) ;
                  }
-                 sprintf( cmd ,
-                          "3dmask_tool -input %s.ETACtmask.1pos.*.nii -union -prefix %s.%s.ETACmask.1pos.%s.nii.gz" ,
-                          prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
-                 system(cmd) ;
+                 if( do_global_etac ){
+                   sprintf( cmd ,
+                            "3dmask_tool -input %s.ETACtmask.global.1pos.*.nii -union -prefix %s.%s.ETACmask.global.1pos.%s.nii.gz" ,
+                            prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the masks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.global.1pos.%s.nii.gz %s.ETACamask.global.1pos.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
+                   system(cmd) ;
+                 }
                  INFO_message("3dttest++ ----- merging %d blur cases to make neg 1-sided activation mask",ncase) ;
                  for( icase=0 ; icase < ncase ; icase++ ){
-                   sprintf( cmd , "3dMultiThresh -quiet -input %s -1tindex 1 -maskonly -neg \\\n   " ,
-                                  cprefix[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.1neg.%s.nii" ,
-                                              prefix_clustsim , clab[icase] ) ;
-                   sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
-                                              prefix_clustsim , nam , clab[icase],sfarp ) ;
+                   if( do_local_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly -neg \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.1neg.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.ETAC.mthresh.%s.%s.nii" ,
+                                                prefix_clustsim , nam , clab[icase],sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.1neg.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                   if( do_global_etac ){
+                     sprintf( cmd , "3dMultiThresh -input %s -1tindex 1 -maskonly -neg \\\n   " ,
+                                    cprefix[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -prefix %s.ETACtmask.global.1neg.%s.nii" ,
+                                                prefix_clustsim , clab[icase] ) ;
+                     sprintf( cmd+strlen(cmd) , " -mthresh %s.%s.%s.niml" ,
+                                                gprefix , clab[icase] , sfarp ) ;
+                     sprintf( cmd+strlen(cmd) , " -allmask %s.ETACamask.global.1neg.%s.nii %s" ,
+                                                prefix_clustsim , clab[icase] , clab[icase] ) ;
+                     system(cmd) ;
+                   }
+                 }
+                 if( do_local_etac ){
+                   sprintf( cmd ,
+                            "3dmask_tool -input %s.ETACtmask.1neg.*.nii -union -prefix %s.%s.ETACmask.1neg.%s.nii.gz" ,
+                                  prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the masks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.1neg.%s.nii.gz %s.ETACamask.1neg.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
                    system(cmd) ;
                  }
-                 sprintf( cmd ,
-                          "3dmask_tool -input %s.ETACtmask.1neg.*.nii -union -prefix %s.%s.ETACmask.1neg.%s.nii.gz" ,
-                                prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
-                 system(cmd) ;
+                 if( do_global_etac ){
+                   sprintf( cmd ,
+                            "3dmask_tool -input %s.ETACtmask.global.1neg.*.nii -union -prefix %s.%s.ETACmask.global.1neg.%s.nii.gz" ,
+                            prefix_clustsim , prefix_clustsim , nam , sfarp ) ;
+                   system(cmd) ;
+                   sprintf( cmd ,  /* cat the masks */
+                            "3dbucket -prefix %s.%s.ETACmaskALL.global.1neg.%s.nii.gz %s.ETACamask.global.1neg.*.nii" ,
+                            prefix_clustsim , nam , sfarp , prefix_clustsim ) ;
+                   system(cmd) ;
+                 }
                }
-               sprintf( cmd , "\\rm %s.ETACtmask.*.nii" , prefix_clustsim ) ; system(cmd) ;
+#if 1
+               sprintf( cmd , "\\rm %s.ETACtmask.*.nii %s.ETACamask.*.nii" , prefix_clustsim,prefix_clustsim );
+               system(cmd);
+#endif
              } /* end of loop over farp goals */
            } /* end of multi-blur mask making */
-         } /* not dryrun */
+         } /* else not dryrun */
        }  /* loop over 3dXClustSim (-Xclu_opt) cases to run */
 
-     } /*--- end 3dXClustSim runs ---*/
+     } /*--- end 3dXClustSim runs [it's been a long, been a long, been a long day] ---*/
 
-     /* remove intermediate files */
+     /* remove diverse intermediate files */
 
      if( do_clustsim != 3 && do_Xclustsim != 2 ){
        strcpy(cmd,"\\rm -vf") ;
@@ -4906,7 +5249,7 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
        }
      }
 
-     /* et viola (or maybe cello? or gelato?) */
+     /* et viola (or maybe cello? or gelato?!) */
 
 #if 0
      free(ccc) ; free(cmd) ;
@@ -4921,6 +5264,7 @@ INFO_message("cprefix[0] = %s",cprefix[0]) ;
    /*--- e finito [3dttest++ is done] ---------------------------------------*/
    /*------------------------------------------------------------------------*/
 
+   INFO_message("----- 3dttest++ says so long, farewell, and happy trails to you :) -----") ;
    exit(0) ;
 
 } /*********** end of main program ********************************************/
@@ -5429,6 +5773,19 @@ static double GIC_qginv( double p )
    return ( (p <= 0.5) ? (dx) : (-dx) ) ;  /* return with correct sign */
 }
 
+/*----------------------------------------------------------------------------*/
+/*! Threshold for upper tail probability of N(0,1) */
+
+#undef  PSMALL
+#define PSMALL 1.e-15
+
+static double zthresh( double pval )
+{
+        if( pval <= 0.0 ) pval = PSMALL ;
+   else if( pval >= 1.0 ) pval = 1.0 - PSMALL ;
+   return GIC_qginv(pval) ;
+}
+
 #ifdef NO_GAMMA
 /*-----------------------------------------------------------------------*/
 /* If the system doesn't provide lgamma() for some primitive reason.
@@ -5534,6 +5891,8 @@ lab4:
       betain = betain+term ;
       temp   = fabs(term) ;
       if(temp <= ACU && temp <= ACU*betain) goto lab5 ;
+
+      /* it is possible for this to hang, consider a counter limit [rickr] */
 
       ai = ai+ONE ;
       ns = ns-1 ;
@@ -5723,4 +6082,42 @@ ENTRY("TT_matrix_setup") ;
    }
 
    EXRETURN ;
+}
+
+/*===========================================================================*/
+/*===== Experimental bootstrap stuff [Oct 2017] =====*/
+
+#define NBOOT 1000
+
+float_pair ttest_boot_1sam( int nx , float *xx , float *xres )
+{
+   float_pair mz = {0.0f,0.0f} ;
+   int bb , ii ;
+   float xbar,xsum , bot,top ;
+   static float *xboot=NULL ;
+
+   if( nx < MIN_boot || xx == NULL ) return mz ;
+
+   for( xbar=0.0f,ii=0 ; ii < nx ; ii++ ) xbar += xx[ii] ;
+   xbar /= (float)nx ;
+
+   if( xres != NULL ) for( ii=0 ; ii < nx ; ii++ ) xres[ii] = xx[ii]-xbar ;
+
+   if( xboot == NULL ) xboot = (float *)malloc(sizeof(float)*NBOOT) ;
+   for( bb=0 ; bb < NBOOT ; bb++ ){
+     for( xsum=0.0f,ii=0 ; ii < nx ; ii++ ) xsum += xx[lrand48()%nx] ;
+     xboot[bb] = xsum ;
+   }
+
+   bot = qfrac_float( NBOOT , 0.05f , xboot ) ;
+   top = qfrac_float( NBOOT , 0.95f , xboot ) ;
+
+   xsum = (top-bot)/(3.28791f*nx) ; /* 3.28791=Gaussian full width @ 5-95% CDF */
+   xsum = xbar / xsum ;
+
+   mz.a = xbar ;
+   mz.b = (toz) ? (float)GIC_student_t2z( (double)xsum , (double)(nx-1) )
+                : TCLIP(xsum) ;
+
+   return mz ;
 }

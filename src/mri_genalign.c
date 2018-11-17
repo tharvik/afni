@@ -1038,6 +1038,7 @@ STATUS("need_pts: subset") ;
 
        nvox = stup->bsim->nvox ;
        dm   = GA_find_relprime_fixed(nvox) ;
+STATUSi("  :: relprime dm",dm) ;
        if( stup->im != NULL ){
          KILL_floatvec(stup->im) ;
          KILL_floatvec(stup->jm) ;
@@ -1052,8 +1053,17 @@ STATUS("need_pts: subset") ;
        mm = (nx/2) + (ny/2)*nx + (nz/2)*nxy ;
        for( pp=0 ; pp < stup->npt_match ; mm=(mm+dm)%nvox )
          if( GOOD(mm) ) qm[pp++] = mm ;
+#if 0
+STATUS("  :: sort qm") ;
        qsort_int( stup->npt_match , qm ) ;
+#else
+       { int cut = (int)(0.5f*sqrtf((float)stup->npt_match)) ;
+STATUSi("  :: mostly sort qm; cut",cut) ;
+         qsort_int_mostly( stup->npt_match , qm , cut ) ;
+       }
+#endif
 
+STATUS("  :: load index arrays") ;
        for( pp=0 ; pp < stup->npt_match ; pp++ ){
          mm = qm[pp] ;
          ii = mm % nx; kk = mm / nxy; jj = (mm-kk*nxy) / nx;
@@ -1466,7 +1476,7 @@ ENTRY("mri_genalign_scalar_ransetup") ;
    twof = 1 << nfr ;  /* 2^nfr */
 
    if( mverb > 1 ) ININFO_message("- number of free params = %d",nfr) ;
-   if( mverb )     fprintf(stderr," + - Testing (%d+%d)*%d params:#",ngtot,nrand,twof) ;
+   if( mverb )     fprintf(stderr," + - Test (%d+%d)*%d params [top5=%s]:#",ngtot,nrand,twof,mrk) ;
 
    myunif_reset(3456789) ;  /* 27 Aug 2008 */
 
@@ -1535,13 +1545,16 @@ ENTRY("mri_genalign_scalar_ransetup") ;
    /* try a little optimization on each of these parameter sets */
 
    vbest = BIGVAL ; jj = 0 ; if( icod != MRI_NN ) stup->interp_code = MRI_LINEAR ;
+   if( mverb ) fprintf(stderr," + - A little optimization:") ;
    for( kk=0 ; kk < ngood ; kk++ ){
      if( kval[kk] >= BIGVAL ) continue ;  /* should not happen */
      (void)powell_newuoa( nfr , kpar[kk] ,
                           0.05 , 0.005 , 11*nfr+17 , GA_scalar_fitter ) ;
      kval[kk]  = GA_scalar_fitter( nfr , kpar[kk] ) ;
      if( kval[kk] < vbest ){ vbest = kval[kk]; jj = kk; }
+     if( mverb ) fprintf(stderr,".") ;
    }
+   if( mverb ) fprintf(stderr,"\n") ;
    stup->vbest = vbest ;  /* save for user's edification */
 
    for( kk=0 ; kk < ngood ; kk++ )  /* make sure are in 0..1 range */

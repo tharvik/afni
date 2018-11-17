@@ -66,6 +66,411 @@
 afni_history_struct ptaylor_history[] = {
 /*=====BELOW THIS LINE=====*/
 
+{ 6, Nov , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_BUG_FIX,
+   "Fixed delta-slice definition for 4D mode of imaging (occasional probs).",
+   "Should have correct gapord values across all views now.\n"
+},
+
+{ 5, Nov , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-olay_alpha' and '-olay_boxed' for new alpha/boxed driving.",
+   "Keepin' up with changes to afni driving, via RWC work.\n"
+},
+
+{ 5, Nov , 2018 , PT , "@djunct_edgy_align_check" , MINOR , TYPE_GENERAL,
+   "Adjust to keep up with new afni alpha/boxed behavior.",
+   "Update internal calls to @chauffeur_afni, which needed new opts for this.\n"
+},
+
+{ 5, Nov , 2018 , PT , "3dAllineate" , MICRO , TYPE_GENERAL,
+   "Help file update: move *the* useful cost funcs lpa and lpc into main part.",
+   "These are no longer listed as experimental!\n"
+},
+
+{ 1, Nov , 2018 , PT , "1dplotpy" , MAJOR , TYPE_NEW_PROG,
+   "New plotting program for 1D files.",
+   "Copies much of the fun 1dplot capability to some pythonic realm.\n"
+},
+
+{ 21, Oct , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-pbar_saveim PBS' and '-pbar_dim PBD', to output color pbar.",
+   "Just add in new AFNI driving functionality from RWC, to save colorbar.\n"
+},
+
+{ 21, Oct , 2018 , PT , "apqc_make_html.py" , MINOR , TYPE_NEW_PROG,
+   "Helper program for afni_proc.py.",
+   "Run @ss_review_html, build QC dir with html file for ss review.\n"
+},
+
+{ 21, Oct , 2018 , PT , "apqc_make_tcsh.py" , MINOR , TYPE_NEW_PROG,
+   "Helper program for afni_proc.py.",
+   "Make @ss_review_html script for HTML version of AP QC.\n"
+},
+
+{ 16, Oct , 2018 , PT , "@FindAfniDsetPath" , MINOR , TYPE_BUG_FIX,
+   "Maybe not really a bug, but this program wasn't work as it should have.",
+   "It now should find NIFTI sets better, and use afnirc env vars.\n"
+},
+
+{ 15, Oct , 2018 , PT , "@djunct_edgy_align_check" , MINOR , TYPE_NEW_PROG,
+   "Helper program for @chauffeur_afni-- wrapper of it for QC stuff.",
+   "It's for alignment checking, and it's... edgy.\n"
+},
+
+{ 15, Oct , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-box_focus_slices REF', to avoid looking at empty slices.",
+   "Can used a masked dset as REF to focus on certain slices only.\n"
+},
+
+{ 15, Oct , 2018 , PT , "@djunct_slice_space" , MINOR , TYPE_NEW_PROG,
+   "Helper program for @chauffeur_afni.",
+   "Calculate even spacing of slices for montaging.\n"
+},
+
+{ 15, Oct , 2018 , PT , "3dAutobox" , MINOR , TYPE_NEW_OPT,
+   "More new options",
+   "Also output midslices, more info to screen (on-demand), and xyz stuff.\n"
+},
+
+{ 15, Oct , 2018 , PT , "@xyz_to_ijk" , MICRO , TYPE_GENERAL,
+   "Fixed help file to list all opts.",
+   "Now '-prefix ...' appears with apsearch.\n"
+},
+
+{ 15, Oct , 2018 , PT , "3dAutobox" , MICRO , TYPE_GENERAL,
+   "Allow for subbrick selection of input",
+   "Tiny internal change-- moving where dset is loaded+checked.\n"
+},
+
+{ 15, Oct , 2018 , PT , "3dAutobox" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-extent_ijk_to_file FF'.",
+   "Output IJK extents to a simple-formatted text file.\n"
+},
+
+{ 28, Aug , 2018 , PT , "@xyz_to_ijk" , MINOR , TYPE_NEW_PROG,
+   "Helper program to be able to convert xyz coors to ijk indices.",
+   "Supplementary program.\n"
+},
+
+{ 15, Mar , 2018 , PT , "fat_proc_convert_dwis" , MINOR , TYPE_NEW_OPT,
+   "Can provide NIFTI+bvec+bval files as inp, not just a directory of dicoms.",
+   "All niceifying steps can thus be applied to already-converted vol.\n"
+},
+
+{ 10, Aug , 2018 , PT , "3dClusterize" , MINOR , TYPE_BUG_FIX,
+   "Allow non-stat bricks to be thresholded.",
+   "Before, if the [ithr] brick was nonstat, crashing occurred.\n"
+},
+
+{ 1, Aug , 2018 , PT , "@chauffeur_afni" , MICRO , TYPE_BUG_FIX,
+   "Deal correctly with percentile values for 4D ulay in non-4Dmode...",
+   "... because user may specify with subbrick selectors.\n"
+},
+
+{ 31, July , 2018 , PT , "fat_proc_dwi_to_dt" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-check_abs_min ..'.",
+   "Just allows the same-named opt from 1dDW_Grad_o_Mat++ to be used.\n"
+},
+
+{ 31, July , 2018 , PT , "@GradFlipTest" , MINOR , TYPE_NEW_OPT,
+   "New opt: '-check_abs_min ..'.",
+   "Just allows the same-named opt from 1dDW_Grad_o_Mat++ to be used.\n"
+},
+
+{ 25, July , 2018 , PT , "@chauffeur_afni" , MAJOR , TYPE_GENERAL,
+   "Several new options, as well as ability to deal with 4D images.",
+   "Many new features, probably including minor bug fixes.\n"
+},
+
+{ 25, July , 2018 , PT , "@djunct_calc_mont_dims.py" , MINOR , TYPE_BUG_FIX,
+   "Was excluding solution of a square set of dimensions.",
+   "Tested; seems fine now.\n"
+},
+
+{ 23, July , 2018 , PT , "3dClusterize" , MICRO , TYPE_GENERAL,
+   "Check about overwriting files before trying to write.",
+   "This way, failure to write file exits nonzeroly.\n"
+},
+
+{ 17, July , 2018 , PT , "@djunct_select_str.py" , MICRO , TYPE_GENERAL,
+   "Converted to python3 compatible, using 2to3.",
+   "Tested; seems fine.\n"
+},
+
+{ 17, July , 2018 , PT , "@djunct_combine_str.py" , MICRO , TYPE_GENERAL,
+   "Converted to python3 compatible, using 2to3.",
+   "Tested; seems fine.\n"
+},
+
+{ 17, July , 2018 , PT , "@djunct_calc_mont_dims.py" , MICRO , TYPE_GENERAL,
+   "Converted to python3 compatible, using 2to3.",
+   "Tested; seems fine.\n"
+},
+
+{ 1, July , 2018 , PT , "@SSwarper" , MAJOR , TYPE_NEW_OPT,
+   "New opt:  well, actually, it is new to *have* explicit options now!",
+   "Same great functionality, but with more flexible options/names/outputs.\n"
+},
+
+{ 1, July , 2018 , PT , "@snapshot_volreg" , MINOR , TYPE_GENERAL,
+   "Now respects including a path in the third argument (prefix/filename).",
+   "Useful for scripting and selecting directory for output images.\n"
+},
+
+{ 26, June , 2018 , PT , "fat_proc_axialize_anat" , MINOR , TYPE_NEW_OPT,
+   "New opt '-focus_by_ss' to do skullstripping before alignment stuff.",
+   "Final dset is *not* skullstripped, but it helps with center of mass.\n"
+},
+
+{ 26, June , 2018 , PT , "fat_proc_select_vols" , MINOR , TYPE_BUG_FIX,
+   "Bug fixed in supplementary program to *this* program.",
+   "Used to get an error when no bad vols were selected.\n"
+},
+
+{ 26, June , 2018 , PT , "@djunct_select_str.py" , MINOR , TYPE_BUG_FIX,
+   "Would return an error when *no* bad vols were selected.",
+   "Note about fixing it in Jan, 2018; must have forgot to push that ver!\n"
+},
+
+{ 26, June , 2018 , PT , "fat_proc_convert_anat" , MINOR , TYPE_NEW_OPT,
+   "Can provide a NIFTI file as input, not just a directory of dicoms.",
+   "All niceifying steps can thus be applied to already-converted vol.\n"
+},
+
+{ 25, June , 2018 , PT , "fat_proc_select_vols" , MINOR , TYPE_GENERAL,
+   "The adjunct program, @djunct_dwi_selector.bash, was changed to be tcsh.",
+   "No output diffs; but bash one couldn't run on new Mac OS (bad Mac)...\n"
+},
+
+{ 1, June , 2018 , PT , "3dAmpToRSFC" , MINOR , TYPE_GENERAL,
+   "Adapted to changes of 3dLombScargle.",
+   "Simpler scaling to match Parseval.\n"
+},
+
+{ 1, June , 2018 , PT , "3dLombScargle" , MINOR , TYPE_GENERAL,
+   "Change scaling of output.",
+   "Simpler scaling to match Parseval.\n"
+},
+
+{ 1, June , 2018 , PT , "fat_proc_axialize_anat" , MINOR , TYPE_NEW_OPT,
+   "New pre-alignment opt, -pre_align_center_mass.",
+   "Probably more useful than older -pre_center_mass.\n"
+},
+
+{ 1, June , 2018 , PT , "3dClusterize" , MICRO , TYPE_NEW_OPT,
+   "New opt to output vols even if no clusters are found.",
+   "These would be empty vols-- juuuust if the user wants.\n"
+},
+
+{ 30, May , 2018 , PT , "fat_proc_map_to_dti" , MINOR , TYPE_NEW_OPT,
+   "User can specify matching cost and warp.",
+   "How exciting is that??  (Well, mostly for test comparisons...).\n"
+},
+
+{ 30, May , 2018 , PT , "@suma_reprefixize_spec" , MICRO , TYPE_BUG_FIX,
+   "Changing 'more' -> 'cat', internally.",
+   "Think 'more' gave oddness at times- dumped weird chars and broke files.\n"
+},
+
+{ 29, May , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_NEW_OPT,
+   "Can crop the saved images.",
+   "See the '-crop_*' options.\n"
+},
+
+{ 27, May , 2018 , PT , "3dClusterize" , MINOR , TYPE_GENERAL,
+   "Make report cleaner, and add in INT_MAP property to output clust map.",
+   "Thanks, D. Glen for more useful suggestions.\n"
+},
+
+{ 23, May , 2018 , PT , "3dClusterize" , MINOR , TYPE_GENERAL,
+   "Some bug fixes if dsets are left out, some new checks on what user asks.",
+   "User can't run multi-sided tests on single-sided stats now...\n"
+},
+
+{ 22, May , 2018 , PT , "fat_proc_filter_dwis" , MAJOR , TYPE_BUG_FIX,
+   "Was unioning, not intersecting, multiple selector strings.",
+   "Fixed the issue in subprogram @djunct_combin_str.py.\n"
+},
+
+{ 21, May , 2018 , PT , "p2dsetstat" , MINOR , TYPE_NEW_OPT,
+   "Include '-bisided' as a type of test, explicitly.",
+   "Same behavior as '-2sided', just easier for scripting.\n"
+},
+
+{ 17, May , 2018 , PT , "3dClusterize" , MINOR , TYPE_GENERAL,
+   "String subbrick selectors now work for -idat and -ithr.",
+   "Also, the text report contains more (useful?) information.\n"
+},
+
+{ 13, May , 2018 , PT , "3dClusterize" , MINOR , TYPE_BUG_FIX,
+   "Wouldn't work with extra dset entered- fixed now.",
+   "Can enter extra beta/effect estimate set for clusterizing.\n"
+},
+
+{ 12, May , 2018 , PT , "3dClusterize" , MAJOR , TYPE_NEW_PROG,
+   "Perform clusterizing (voxelwise and volume-wise thresholding) on a dset.",
+   "Basically like 3dclust but has some new options and easier syntax.\n"
+},
+
+{ 22, Apr , 2018 , PT , "fat_proc_axialize_anat" , MINOR , TYPE_BUG_FIX,
+   "When using '-remove_inf_sli', the wrong volume was being warped at end.",
+   "Final warped volume had lower slice reduction, when it shouldn't have.\n"
+},
+
+{ 22, Apr , 2018 , PT , "3dSliceNDice" , MAJOR , TYPE_NEW_PROG,
+   "Calculate Dice coefficients between volumes on a slicewise basis.",
+   "Useful for comparing masks/maps of volumes.\n"
+},
+
+{ 16, Apr , 2018 , PT , "p2dsetstat" , MAJOR , TYPE_NEW_PROG,
+   "Program to convert a p-value to a statistic, using params in dset header.",
+   "Useful to calculate thresholds for a particular volume.\n"
+},
+
+{ 2, Apr , 2018 , PT , "@radial_correlate" , MICRO , TYPE_GENERAL,
+   "Make -hview option work with the program.",
+   "Didn't before, does now.\n"
+},
+
+{ 14, Mar , 2018 , PT , "fat_proc_dwi_to_dt" , MINOR , TYPE_BUG_FIX,
+   "Crashed no ref dset was used in mapping.",
+   "Crashes no more under such circumstance.\n"
+},
+
+{ 14, Mar , 2018 , PT , "fat_proc_filter_dwis" , MINOR , TYPE_BUG_FIX,
+   "Crashed when b-value file was input.",
+   "Crashes no more under such circumstance.\n"
+},
+
+{ 6, Mar , 2018 , PT , "fat_proc_convert_anat" , MINOR , TYPE_MODIFY,
+   "Default orientation for nifti files to be 'RAI' instead of 'RPI'.",
+   "This will be more in line with TORTOISE (and AFNI DICOM-coor default).\n"
+},
+
+{ 6, Mar , 2018 , PT , "fat_proc_convert_dwis" , MINOR , TYPE_MODIFY,
+   "Default orientation for nifti files to be 'RAI' instead of 'RPI'.",
+   "This will be more in line with TORTOISE (and AFNI DICOM-coor default).\n"
+},
+
+{ 22, Feb , 2018 , PT , "@chauffeur_afni" , MINOR , TYPE_NEW_OPT,
+   "Can now apply p-to-stat calcs for thresholding.",
+   "User gives p-value, which gets made to appropriate stat for thresh.\n"
+},
+
+{ 13, Feb , 2018 , PT , "fat_proc_filter_dwis" , MINOR , TYPE_MODIFY,
+   "Can now accept *multiple* selector strings that get merged.",
+   "Multiple strings/files can be input, yay.\n"
+},
+
+{ 8, Feb , 2018 , PT , "fat_proc_dwi_to_dt" , MINOR , TYPE_BUG_FIX,
+   "When a mask was input, it wasn't resampled if needed to be.",
+   "Now fixed, and added check that grid of mask is good. Good.\n"
+},
+
+{ 6, Feb , 2018 , PT , "fat_proc_axialize_anat" , MINOR , TYPE_NEW_OPT,
+   "Can put a ceiling on the final output volume: -do_ceil_out.",
+   "Reduce impact of tiny spikes (often at fringe) later on.\n"
+},
+
+{ 1, Feb , 2018 , PT , "@GradFlipTest" , MINOR , TYPE_MODIFY,
+   "Internal change to allow subset selection in text files.",
+   "Can now use subbrick selector notation with bvals/bvecs.\n"
+},
+
+{ 12, Jan , 2018 , PT , "@djunct_select_str.py" , MINOR , TYPE_BUG_FIX,
+   "Would return an error when *no* bad vols were selected.",
+   "Now updated to work fine with that; just an intermed program.\n"
+},
+
+{ 12, Jan , 2018 , PT , "3dRSFC" , MICRO , TYPE_GENERAL,
+   "Deal with change elsewhere to definition of a function.",
+   "New option added to function, just need another arg; shd be no change.\n"
+},
+
+{ 12, Jan , 2018 , PT , "fat_proc_align_anat_pair" , MICRO , TYPE_BUG_FIX,
+   "Output 3dAllineate's weight vol to working dir, not present dir.",
+   "Minor change, does not affect alignment/output.\n"
+},
+
+{ 22, Dec , 2017 , PT , "fat_proc_connec_vis" , MINOR , TYPE_NEW_OPT,
+   "Can output the intermediate tstat or tcat files of ROI maps.",
+   "Might be useful in subsequent volumetric analyses.\n"
+},
+
+{ 20, Dec , 2017 , PT , "fat_proc_connec_vis" , MINOR , TYPE_MODIFY,
+   "Changing the way that outputting is specified.",
+   "Make making a separate directory the default output; new opt for files.\n"
+},
+
+{ 29, Sep , 2017 , PT , "@chauffeur_afni" , MINOR , TYPE_MODIFY,
+   "Now has help with list of options.",
+   "Should be useful for users during processing.\n"
+},
+
+{ 29, Nov , 2017 , PT , "@djunct_4d_imager" , MAJOR , TYPE_NEW_PROG,
+   "Helper function to make montages and movies of 4D dsets.",
+   "Useful when proc'ing dsets, make record of them.\n"
+},
+
+{ 26, Oct , 2017 , PT , "fat_proc_connec_vis" , MAJOR , TYPE_NEW_PROG,
+   "Visualize 'white matter connection' volumes output by 3dTrackID.",
+   "Combine separate '-dump_rois ...' output into SUMAble surface maps.\n"
+},
+
+{ 12, Oct , 2017 , PT , "@GradFlipTest" , MINOR , TYPE_MODIFY,
+   "Change output formatting and getting basename of prefix name.",
+   "Easier output and reading in terminal/files.\n"
+},
+
+{ 04, Oct , 2017 , PT , "@GradFlipTest" , MINOR , TYPE_MODIFY,
+   "Change the output directory naming/choosing options.",
+   "Do more with just '-prefix ...', in standard AFNI fashion.\n"
+},
+
+{ 22, Sep , 2017 , PT , "fat_proc_map_to_dti" , MINOR , TYPE_BUG_FIX,
+   "On Macs, when not all types of 'follower' sets were used, this gave err.",
+   "Have changed internal behavior to avoid this 'Mac'errorizing.\n"
+},
+
+{ 20, Sep , 2017 , PT , "1dDW_Grad_o_Mat++" , MINOR , TYPE_NEW_OPT,
+   "New opt to push through tiny, negative diagonal elements in bmatrices.",
+   "Useful-- but use this option cautiously, and look at your data...\n"
+},
+
+{ 20, Sep , 2017 , PT , "@GradFlipTest" , MICRO , TYPE_MODIFY,
+   "Change way text is dumped to screen.",
+   "Should prevent any need for user keypress if terminal is small.\n"
+},
+
+{ 19, Sep , 2017 , PT , "3dLombScargle" , MINOR , TYPE_BUG_FIX,
+   "delF calculated correctly now.",
+   "Had been at N-1 instead of N.  Better Parsevalling now.\n"
+},
+
+{ 14, Sep , 2017 , PT , "3dLombScargle" , MAJOR , TYPE_BUG_FIX,
+   "Finally revisiting this-- fixed up lots of things.",
+   "Good to go for basic functionality now.\n"
+},
+
+{ 11, Sep , 2017 , PT , "plugout_drive" , MICRO , TYPE_GENERAL,
+   "Change level: actually nano.  Fixed Example 1 (missing apostrophe).",
+   "It's the little things in life, though, sometimes.\n"
+},
+
+{ 06, Sep , 2017 , PT , "fat_proc_dwi_to_dt" , MICRO , TYPE_MODIFY,
+   "Quick change: keep FOV same for b0 ulay comparison with anat-edge.",
+   "Minor adjustment for keeping FOV consistent.\n"
+},
+
+{ 06, Sep , 2017 , PT , "fat_proc_dwi_to_dt" , MINOR , TYPE_MODIFY,
+   "Output a couple more types of QC images by default.",
+   "Output b0 ulay with anat-edge olay;  also, some uncert images.\n"
+},
+
+{ 06, Sep , 2017 , PT , "@chauffeur_afni" , MINOR , TYPE_MODIFY,
+   "Now gets output path as part of '-prefix' as opposed to sep '-outdir'.",
+   "Now in line with most of AFNI funcs.\n"
+},
+
 { 24, Aug , 2017 , PT , "@GradFlipTest" , MINOR , TYPE_MODIFY,
    "The file storing the flip recommendation will *overwrite* a previous one.",
    "Previous version of this would *append to*, which seems pointless.\n"

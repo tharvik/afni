@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+#include <cs.h>
 
 /*-------------------------------------------------------------------------*/
 /*! What we might thank people for. */
@@ -152,7 +153,7 @@ typedef struct { int mon,day; char *label; } mday ;
 /*-----------------------------------------*/
 /*! max # trivia elements allowed per date */
 
-#define NTMAX 31
+#define NTMAX 99
 
 char * AFNI_get_date_trivia(void) ;
 
@@ -186,6 +187,7 @@ static mday holiday[] = {
    {JAN, 5,"King Juan Carlos I's birthday"                           } ,
    {JAN, 5,"Konrad Adenauer's birthday"                              } ,
    {JAN, 6,"Sherlock Holmes' birthday"                               } ,
+   {JAN, 6,"Birthday of Mr Spock"                                    } ,
    {JAN, 6,"Jeanne d'Arc's birthday"                                 } ,
    {JAN, 7,"Millard Fillmore's birthday"                             } ,
    {JAN, 8,"Stephen Hawking's birthday"                              } ,
@@ -215,6 +217,7 @@ static mday holiday[] = {
    {JAN,20,"Anniversary of end of American Revolution"               } ,
    {JAN,20,"George Burns' birthday"                                  } ,
    {JAN,20,"Penguin Awareness Day"                                   } ,
+   {JAN,21,"Squirrel Appreciation Day"                               } ,
    {JAN,23,"David Hilbert's birthday"                                } ,
    {JAN,23,"Humphrey Bogart's birthday"                              } ,
    {JAN,24,"Anniversary of beer in cans"                             } ,
@@ -259,6 +262,7 @@ static mday holiday[] = {
    {FEB,12,"Abraham Lincoln's birthday"                              } ,
    {FEB,12,"Charles Darwin's birthday"                               } ,
    {FEB,13,"Kim Novak's birthday"                                    } ,
+   {FEB,13,"The Ides of February"                                    } ,
    {FEB,14,"Saint Valentine's Day"                                   } ,
    {FEB,15,"Galileo Galilei's birthday"                              } ,
    {FEB,18,"Gambia Independence Day"                                 } ,
@@ -270,6 +274,7 @@ static mday holiday[] = {
    {FEB,22,"Saint Malgorzata's (of Cortona) Day"                     } ,
    {FEB,24,"St. Ethelbert's day"                                     } ,
    {FEB,25,"Auguste Renoir's birthday"                               } ,
+   {FEB,25,"Kuwait National Day"                                     } ,
    {FEB,25,"Anniversary of Battle of Los Angeles"                    } ,
    {FEB,27,"Dominican Republic Independence Day"                     } ,
    {FEB,27,"Anniversary of Lincoln's Cooper Union Speech"            } ,
@@ -402,8 +407,10 @@ static mday holiday[] = {
    {MAY,13,"Anniversary of Jamestown settlement"                     } ,
    {MAY,14,"Paraguay Independence Day"                               } ,
    {MAY,15,"Israel Independence Day"                                 } ,
+   {MAY,15,"The Ides of May"                                         } ,
    {MAY,16,"Maria Gaetana Agnesi's birthday"                         } ,
-   {MAY,16,"Try Not To Be Stupid Day"                                } ,
+   {MAY,16,"Try Not To Be Too Stupid Day"                            } ,
+   {MAY,16,"A Day of Unforgettable Exaltation"                       } ,
    {MAY,17,"Norway National Day"                                     } ,
    {MAY,18,"John Paul II's birthday"                                 } ,
    {MAY,18,"Bertrand Russell's birthday"                             } ,
@@ -432,10 +439,14 @@ static mday holiday[] = {
 
    {JUN, 1,"Marilyn Monroe's birthday"                               } ,
    {JUN, 1,"Tunisia National Day"                                    } ,
+   {JUN, 1,"Anniversary of first of Scotch whisky"                   } ,
    {JUN, 2,"Festa della Repubblica!"                                 } ,
+   {JUN, 3,"Birthday of Tony Curtis"                                 } ,
    {JUN, 4,"Anniversary of Battle of Midway"                         } ,
+   {JUN, 4,"Hug Your Cat Day"                                        } ,
    {JUN, 5,"John Maynard Keynes' birthday"                           } ,
    {JUN, 5,"Seychelles Independence Day"                             } ,
+   {JUN, 5,"Anniversary of Montgolfier Balloon"                      } ,
    {JUN, 6,"D-Day"                                                   } ,
    {JUN, 6,"Pisa Bootcamp Anniversary"                               } ,
    {JUN, 7,"Imre Nagy's birthday"                                    } ,
@@ -447,17 +458,18 @@ static mday holiday[] = {
    {JUN,11,"John Constable's birthday"                               } ,
    {JUN,12,"Philippines Independence Day"                            } ,
    {JUN,13,"Winfield Scott's birthday"                               } ,
+   {JUN,13,"Anniversary of Edict of Milan"                           } ,
    {JUN,13,"William Butler Yeats' birthday"                          } ,
    {JUN,14,"Harriet Beecher Stowe's birthday"                        } ,
    {JUN,14,"Founding of US Army (1775)"                              } ,
    {JUN,14,"Alois Alzheimer's birthday"                              } ,
+   {JUN,14,"National Bourbon Day"                                    } ,
    {JUN,15,"Anniversary of Magna Carta"                              } ,
    {JUN,15,"Anniversary of US-British 'Pig War'"                     } ,
    {JUN,16,"Geronimo's birthday"                                     } ,
    {JUN,17,"Anniversary of Battle of Bunker's Hill"                  } ,
    {JUN,17,"Iceland Republic Day"                                    } ,
    {JUN,19,"Juneteenth"                                              } ,
-/*   {JUN,19,"Kuwait National Day"                                     } , */
    {JUN,20,"Anniversary of Oxford University"                        } ,
    {JUN,21,"Alexander the Great's birthday"                          } ,
    {JUN,22,"Anniversary of saxophone invention"                      } ,
@@ -485,8 +497,11 @@ static mday holiday[] = {
    {JUL, 4,"Rube Goldberg's birthday"                                } ,
    {JUL, 5,"Anniversary of Newton's Principia"                       } ,
    {JUL, 5,"Anniversary of introduction of bikini"                   } ,
+   {JUL, 5,"Anniversary of Spam (the 'meat')"                        } ,
    {JUL, 5,"Venezuela Independence Day"                              } ,
+   {JUL, 5,"Bill Watterson's birthday"                               } ,
    {JUL, 6,"Malawi Independence Day"                                 } ,
+   {JUL, 6,"John Paul Jones' birthday"                               } ,
    {JUL, 7,"Satchel Paige's birthday"                                } ,
    {JUL, 7,"Robert Heinlein's birthday"                              } ,
    {JUL, 7,"Anniversary of Sliced Bread!"                            } ,
@@ -497,11 +512,13 @@ static mday holiday[] = {
    {JUL,11,"Birthday of Tenzin Gyatso"                               } ,
    {JUL,12,"Sao Tome & Principe Independence Day"                    } ,
    {JUL,13,"Gaius Julius Caesar's birthday"                          } ,
+   {JUL,13,"Jean-Luc Picard's birthday"                              } ,
    {JUL,14,"Bastille Day - Vive la France!"                          } ,
-   {JUL,14,"Cow Appreciation Day"                                    } ,
+   {JUL,14,"Cow Appreciation Day (Moooo)"                            } ,
    {JUL,14,"Iraq Republic Day"                                       } ,
    {JUL,14,"Gerald Ford's birthday"                                  } ,
    {JUL,15,"Anniversary of Battle of Grunwald"                       } ,
+   {JUL,15,"Appreciate a Cow Day"                                    } ,
    {JUL,15,"Rembrandt van Rijn's birthday"                           } ,
    {JUL,16,"Anniversary of 1st atomic explosion"                     } ,
    {JUL,16,"Anniversary of Apollo 11's launch"                       } ,
@@ -538,6 +555,7 @@ static mday holiday[] = {
    {JUL,31,"Anniversary of Battle of Passchendaele"                  } ,
    {JUL,31,"Primo Levi's birthday"                                   } ,
    {JUL,31,"Joanne Kathleen Rowling's birthday"                      } ,
+   {JUL,31,"Harry Potter's birthday"                                 } ,
 
    {AUG, 1,"Anniversary of Warsaw Uprising"                          } ,
    {AUG, 1,"Dahomey Independence Day"                                } ,
@@ -608,7 +626,6 @@ static mday holiday[] = {
    {SEP, 8,"Andorra National Festival"                               } ,
    {SEP, 9,"Bulgaria Liberation Day"                                 } ,
    {SEP,11,"9/11"                                                    } ,
-   {SEP,11,"September Eleven"                                        } ,
    {SEP,12,"Anniversary of Battle of Vienna"                         } ,
    {SEP,14,"Jan Masaryk's birthday"                                  } ,
    {SEP,14,"Anniversary of Friston & Cox Debut"                      } ,
@@ -626,11 +643,13 @@ static mday holiday[] = {
    {SEP,18,"Mexico Independence Day"                                 } ,
    {SEP,18,"Founding of US Air Force (1947)"                         } ,
    {SEP,19,"Anniversary of Battle of Saratoga"                       } ,
+   {SEP,19,"Hermione Granger's birthday"                             } ,
    {SEP,20,"Anniversary of Battle of Chalons"                        } ,
    {SEP,21,"Chile Independence Day"                                  } ,
    {SEP,21,"Belize Independence Day"                                 } ,
    {SEP,21,"Malta Independence Day"                                  } ,
-   {SEP,22,"Bilbo & Frodo Baggin's birthday"                         } ,
+   {SEP,22,"Bilbo & Frodo Baggins' birthday"                         } ,
+   {SEP,22,"Hug a Rhinoceros (carefully) Day"                        } ,
    {SEP,22,"Mali Republic Day"                                       } ,
    {SEP,23,"Saudi Arabia National Day"                               } ,
    {SEP,23,"Emperor Augustus Caesar's birthday"                      } ,
@@ -639,7 +658,7 @@ static mday holiday[] = {
    {SEP,28,"Anniversary of discovery of penicillin"                  } ,
    {SEP,28,"Seymour Cray's birthday"                                 } ,
    {SEP,29,"Lech Walesa's birthday"                                  } ,
-   {SEP,30,"Botswana Independence Day"                               } ,
+   {SEP,30,"Botswana Independence Day!"                              } ,
 
    {OCT, 1,"Nigeria Independence Day"                                } ,
    {OCT, 2,"Guinea Independence Day"                                 } ,
@@ -723,6 +742,7 @@ static mday holiday[] = {
    {NOV,19,"Monaco National Fete"                                    } ,
    {NOV,19,"World Toilet Day"                                        } ,
    {NOV,20,"Edwin Hubble's birthday"                                 } ,
+   {NOV,20,"National Absurdity Day"                                  } ,
    {NOV,21,"Francois-Marie Arouet's birthday"                        } ,
    {NOV,22,"Anniversary of Kennedy's assasination"                   } ,
    {NOV,22,"Lebanon Independence Day"                                } ,
@@ -1419,6 +1439,66 @@ int AFNI_is_Easter( int yy , int mm , int dd )
    return ( mm == EasterDate[yy].mm && dd == EasterDate[yy].dd ) ;
 }
 
+/*----------------------------------------------------------------------------*/
+/* Stuff for Rosh Hashanah calculation [22 Sep 2017] */
+
+/* Simple day of week calculator (Gregorian):
+   m=1..12 ; d=1..31 ; y=1800... ; return=0..6 (Sun..Sat) */
+
+static int dow(int m,int d,int y){
+  y -= (m<3) ;
+  return(y+y/4-y/100+y/400+"-bed=pen+mad."[m]+d)%7;
+}
+
+/* Compute date of Rosh Hashanah in Sep, given year number (>= 1800):
+   see https://quasar.as.utexas.edu/BillInfo/ReligiousCalendars.html */
+
+static int rosh(int y)
+{
+   int gold , nn , dd ;
+   double nplus , ff ;
+
+   gold = y%19 + 1 ; /* G */
+
+   /* N + fraction =
+       {[Y/100] - [Y/400] - 2} + 765433/492480*Remainder(12G|19)
+                               + Remainder(Y|4)/4 - (313Y+89081)/98496 */
+
+   nplus = ((y/100)-(y/400)-2) + 765433.0/492480.0*((12*gold)%19)
+                               + 0.25*(y%4) - (313.0*y+89081.0)/98496.0 ;
+
+   nn = (int)nplus ;
+   ff = nplus - (double)nn ;
+
+   dd = dow(9,nn,y) ; /* day of week: 0..6 (Sun..Sat) */
+
+   /* If the day calculated above is a Sunday, Wednesday, or Friday,
+      Rosh Hashanah falls on the next day (Monday, Thursday or Saturday).
+
+      If the calculated day is a Monday, and if the fraction is greater than
+      or equal to 23269/25920, and if Remainder(12G|19) is greater than 11,
+      Rosh Hashanah falls on the next day, a Tuesday.
+
+      If it is a Tuesday, and if the fraction is greater than or equal to
+      1367/2160, and if Remainder(12G|19) is greater than 6, Rosh Hashanah
+      falls two days later, on Thursday (NOT WEDNESDAY!!).                 */
+
+   if( dd==0 || dd==3 || dd==5 ){                    /* Sun, Wed, or Fri are taboo */
+     nn++ ;
+   } else if( dd==1 && ff >= 23269.0/25920.0 && (12*gold)%19 > 11 ){ /* Mon -> Tue */
+     nn++ ;
+   } else if( dd==2 && ff >= 1367.0/2160.0   && (12*gold)%19 >  6 ){ /* Tue -> Thu */
+     nn += 2 ;
+   }
+
+   return nn ;
+}
+
+int AFNI_is_Rosh_Hashanah( int yy , int mm , int dd )
+{
+   return ( (mm==9) && (rosh(yy)==dd) ) ;
+}
+
 /*------------------------------------------------------------------------------*/
 
 static yymmdd DiwaliDate[] = {
@@ -1483,6 +1563,22 @@ int AFNI_is_Eid( int yy , int mm , int dd )
    if( yy < EID_FIRST || yy > EID_LAST ) return 0 ;
    yy = yy - EID_FIRST ;
    return ( mm == EidDate[yy].mm && dd == EidDate[yy].dd ) ;
+}
+
+/*------------------------------------------------------------------------------*/
+
+char * julian_date_string(void)  /* 29 Oct 2018 */
+{
+   double tt ; int ii,jj ;
+   static char jdate[128] ; char *ss ;
+
+   tt = (double)time(NULL) ;   /* seconds since 01 Jan 1970 */
+   tt = ( tt / 86400.0 ) + 2440587.5 ;
+   ii = (int)tt ;
+   ss = commaized_integer_string(ii) ;
+   jj = (int)rint((tt-(double)ii)*100000.0) ;
+   sprintf(jdate,"Julian Date: %s.%0d" , ss , jj ) ;
+   return jdate ;
 }
 
 /*------------------------------------------------------------------------------*/
@@ -1551,6 +1647,11 @@ char * AFNI_get_date_trivia(void)
    if( ntar < NTMAX && AFNI_is_Easter(lt->tm_year+1900,lt->tm_mon+1,lt->tm_mday) )
       tar[ntar++] = "Easter (Western rite)" ;
 
+   /* Rosh Hashanah [22 Sep 2017] */
+
+   if( ntar < NTMAX && AFNI_is_Rosh_Hashanah(lt->tm_year+1900,lt->tm_mon+1,lt->tm_mday) )
+      tar[ntar++] = "Rosh Hashanah" ;
+
    /* Diwali? */
 
    if( ntar < NTMAX && AFNI_is_Diwali(lt->tm_year+1900,lt->tm_mon+1,lt->tm_mday) )
@@ -1565,6 +1666,9 @@ char * AFNI_get_date_trivia(void)
 
    if( ntar < NTMAX && AFNI_is_Eid(lt->tm_year+1900,lt->tm_mon+1,lt->tm_mday) )
       tar[ntar++] = "Eid al-Fitr" ;
+
+   if( ntar < NTMAX )
+      tar[ntar++] = julian_date_string() ;
 
    ncall++ ;
    if( ntar == 0 || (ntar < NTMAX && ncall > 3) ){  /* 04 Oct 2007 */
@@ -1592,4 +1696,5 @@ char * AFNI_get_date_trivia(void)
 #else
    return "[Elen sila lumenn' omentielvo]" ;
 #endif
+
 }

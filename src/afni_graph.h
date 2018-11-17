@@ -436,6 +436,7 @@ typedef struct {
    /* X11 stuff */
 
    Pixmap  fd_pxWind ;   /* graphs are drawn into this for speed's sake */
+   Widget  top_form ;    /* 24 May 2018 */
    Widget  fdw_graph ;   /* top level widget */
    Widget  draw_fd ;     /* drawing area */
    Pixmap  glogo_pixmap ; /* for the corner */
@@ -735,6 +736,11 @@ extern void GRA_tfade_CB( Widget , XtPointer , XtPointer ) ;  /* Mar 2013 */
  /* 07 Aug 2001 */
 extern void GRA_finalize_global_baseline_CB( Widget,
                                              XtPointer, MCW_choose_cbs * );
+
+ /* 19 Dec 2018 */
+extern int GRA_find_1D_transform( MCW_grapher *grapher , char *nam ) ;
+extern void GRA_startup_1D_transform( char *nam ) ;
+extern void GRA_set_1D_transform( MCW_grapher *grapher , char *nam ) ;
 
 /***-----------------------------------------------------------------------***/
 

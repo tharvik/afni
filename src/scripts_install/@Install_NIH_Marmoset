@@ -4,7 +4,7 @@ set stat = 0
 set sdir = $PWD
 
 set demo = NIH_Marmoset
-set demo_download = NIH_Marmoset_0.01
+set demo_download = NIH_Marmoset_0.02
 
 goto PARSE
 RET_PARSE:
@@ -47,8 +47,8 @@ cd $demo
 set atlas_dir = `pwd`
 @AfniEnv -set AFNI_SUPP_ATLAS_DIR $atlas_dir
 @AfniEnv -set AFNI_WHEREAMI_DEC_PLACES 2
-@AfniEnv -set AFNI_ATLAS_COLORS NIH_Marmoset_0.01_v5H
-@AfniEnv -set AFNI_TEMPLATE_SPACE_LIST NIH_Marmoset
+@AfniEnv -set AFNI_ATLAS_COLORS NIH_Marmoset_0.02_v5H
+@AfniEnv -set AFNI_TEMPLATE_SPACE_LIST "NIH_Marmoset,NIH_Marmoset_stereotaxic"
 cd -
 goto END
 
@@ -86,18 +86,22 @@ PARSE:
 goto RET_PARSE
 
 HELP:
-   echo "Installs the NIH marmoset template and atlases described"
-   echo "in:"
-   echo "    \"Marmoset template\""
-   echo      Cirong Liu, et al, submitted
-   echo ""
-   echo "After the archive is downloaded and unpacked, see its README.txt"
-   echo "for details."
-   echo "Options:"
-   echo "[-wget]: Use wget to download archive. Script chooses by default"
-   echo "         with preference for curl"
-   echo "[-curl]: Use curl to download archive. Script chooses by default"
-   echo "         with preference for curl"
+cat << EOF
+     Installs the NIH marmoset template and atlases described
+     in:
+         "Marmoset template"
+         Cirong Liu, et al, submitted
+     
+     After the archive is downloaded and unpacked, see its README.txt
+     for details.
+     Options:
+     [-wget]: Use wget to download archive. Script chooses by default
+              with preference for curl
+     [-curl]: Use curl to download archive. Script chooses by default
+              with preference for curl
+
+EOF
+
    goto END
 
 BEND:

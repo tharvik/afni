@@ -158,7 +158,8 @@ set_R_io <- function() {
    ll <- find.in.path('R_io.so')
    if (!is.null(ll)) {
       dd <- try(dyn.load(ll), silent=TRUE)
-      if (dd[[1]]!="R_io") {
+      # newer versions might return R_io.so   8 Dec 2017 [rickr]
+      if (dd[[1]]!="R_io" && dd[[1]]!="R_io.so") {
          warn.AFNI(paste("Failed to load R_io.so with this error message:\n"));
          dyn.load(ll)
       } else {
@@ -2744,10 +2745,12 @@ read.AFNI <- function(filename, verb = 0, ApplyScale = 1, PercMask=0.0,
   if (meth == 'AUTO') {
    if (have_R_io()) meth <- 'clib' else meth <- 'Rlib'
   }
-  
+
   an <- parse.AFNI.name(filename);
   
+  
   if (verb > 1) {
+   cat('-- read.AFNI via', meth, an$type, '\n');
    show.AFNI.name(an);
   }
   

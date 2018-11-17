@@ -409,6 +409,10 @@ printf(
 "             needed to go from one space to another\n"
 " -calc_chain srcspace destspace : compute the chain of transformations\n"
 "             combining and inverting transformations where possible\n"
+"     examples: convert coordinates from TT_N27 to MNI or MNI anat space\n"
+"             whereami -calc_chain TT_N27 MNI  -xform_xyz_quiet 10 20 30\n"
+"             whereami -calc_chain TT_N27 MNI  -xform_xyz_quiet 0 0 0\n"
+"             whereami -calc_chain TT_N27 MNIA -xform_xyz_quiet 0 0 0\n"
 " -xform_xyz : used with calc_chain, takes the x,y,z coordinates and \n"
 "             applies the combined chain of transformations to compute\n"
 "             a new x,y,z coordinate\n"
@@ -1359,6 +1363,7 @@ int main(int argc, char **argv)
       return(1) ;
    }
    
+#if 0
    /* linkRbrain output */
    if (linkrbrain_output){
      /* if just testing parsing linkrbrain output, just parse and exit*/
@@ -1400,6 +1405,7 @@ int main(int argc, char **argv)
      } 
      exit(0);
    }
+#endif
 
    for (ixyz = 0; ixyz < nxyz; ++ixyz) {
       x = coord_list[3*ixyz];

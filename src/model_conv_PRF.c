@@ -1,5 +1,5 @@
 /*****************************************************************************
-   Details for this model are in prf_common_circular.c, #incuded.
+   Details for this model are in prf_common_circular.c, #included.
 
    This file now just holds functionality that is specific to the
    basic 4-parameter method.
@@ -9,7 +9,7 @@
    
 #include "NLfit_model.h"
 
-static char  * g_model_ver = "model_conv_PRF, version 2.3, 7 Aug, 2015";
+static char  * g_model_ver = "model_conv_PRF, version 2.4, 19 Jun, 2018";
 
 /* prototypes */
 static int  signal_model( float * , int , float ** , float *, int );
@@ -97,8 +97,10 @@ static int signal_model
   int      debug        /* make some noise */
 )
 {
-  int    maxind;        /* largest dimension */
   float  A, x, y, sigma;/* model params */
+  int    maxind;        /* largest dimension */
+  int    tmpmax;
+
 
   /* assign parameters */
   A = gs[0];
@@ -107,17 +109,27 @@ static int signal_model
   if( debug ) {
      fprintf(stderr, "-d model_conv_PRF parameters: "
                      "A = %f, x = %f, y = %f, sigma = %f\n"
-                     "   nz = %d, nvals = %d, ts_len = %d\n",
+                     "   nx = %d, nz = %d, nvals = %d, ts_len = %d\n",
                      A, x, y, sigma,
-                     DSET_NZ(g_saset), DSET_NVALS(g_saset), ts_length);
+                     DSET_NX(g_saset), DSET_NZ(g_saset), DSET_NVALS(g_saset),
+                     ts_length);
      show_malloc_stats("signal model");
   }
 
   if( ! ISVALID_3DIM_DATASET(g_saset) ) return 0;
 
+  /* possibly restrict the length, via nx if on grid, else nt */
+  /* (was just NX)    30 Aug 2017 */
   maxind = ts_length;
-  if( maxind > DSET_NX(g_saset) ) maxind = DSET_NX(g_saset);
+
+  if( genv_on_grid ) tmpmax = DSET_NX(g_saset);
+  else               tmpmax = DSET_NVALS(g_saset);
+
+  if( maxind > tmpmax ) maxind = tmpmax;
   if( maxind == 0 ) return 0;
+
+  if( debug )
+      fprintf( stderr,"-d NT orig=%d, applied=%d\n", ts_length, maxind);
 
   /* time array must be ordered according to stim dset */
   if( genv_on_grid ) /* scale data directly from grid */

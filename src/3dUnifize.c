@@ -634,6 +634,7 @@ int main( int argc , char *argv[] )
    THD_3dim_dataset *inset=NULL , *outset=NULL ;
    MRI_IMAGE *imin , *imout ;
    float clfrac=0.2f ;
+   int do_mask = 1 ; /* 08 Aug 2018 = 8/8/18 */
 
    AFNI_SETUP_OMP(0) ;  /* 24 Jun 2013 */
 
@@ -700,6 +701,9 @@ int main( int argc , char *argv[] )
        "\n"
        "  -GM        = Also scale to unifize 'gray matter' = lower intensity voxels\n"
        "               (to aid in registering images from different scanners).\n"
+       "              ++ For many datasets (especially those created by averaging),\n"
+       "                 using '-GM' will increase the WM-GM contrast somewhat;\n"
+       "                 however, that depends on the original WM-GM contrast.\n"
        "              ++ This option is recommended for use with 3dQwarp when\n"
        "                 aligning 2 T1-weighted volumes, in order to make the\n"
        "                 WM-GM contrast about the same for the datasets, even\n"
@@ -708,6 +712,10 @@ int main( int argc , char *argv[] )
        "                 3dQwarp match the source dataset to the base dataset.  If you\n"
        "                 later want the original source dataset to be warped, you can\n"
        "                 do so using the 3dNwarpApply program.\n"
+       "              ++ In particular, the template dataset MNI152_2009_template.nii.gz\n"
+       "                 (supplied with AFNI) has been treated with '-GM'. This dataset\n"
+       "                 is the one used by the @SSwarper script, so that script applies\n"
+       "                 3dUnifize with this '-GM' option to help with the alignment.\n"
        "\n"
        "  -Urad rr   = Sets the radius (in voxels) of the ball used for the sneaky trick.\n"
        "               ++ Default value is %.1f, and should be changed proportionally\n"
@@ -1132,6 +1140,15 @@ THD_cliplevel_search(imin) ; exit(0) ;  /* experimentation only */
      mri_invertcontrast_inplace( imout , T2_uperc , T2_mask ) ;
    } else if( do_T2 == 2 ){   /* don't re-invert, but clip off bright edges */
      mri_clipedges_inplace( imout , PKVAL*1.111f , PKVAL*1.055f ) ;
+   }
+
+   if( do_mask ){  /* 08 Aug 2018 */
+     byte *mmm = mri_automask_image(imout) ;
+     float *fff = MRI_FLOAT_PTR(imout) ;
+     int ii , nvox=imout->nvox ;
+     if( verb ) fprintf(stderr,"m") ;
+     for( ii=0 ; ii < nvox ; ii++ ){ if( !mmm[ii] ) fff[ii] = 0.0f ; }
+     free(mmm) ;
    }
 
    if( verb ) fprintf(stderr,"\n") ;

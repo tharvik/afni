@@ -42,11 +42,17 @@ static int neurosynth_link = -1;
 static int sumsdb_link = -1;
 static int linkrbrain_link = -1;
 
+/* atlas name type selected yet for region labels - name, long, both*/
+static int atlas_name_code = -1;
+
 /* global web browser is used here, not sure where else to put it...      */
 char *GLOBAL_browser = NULL ;   /* 30 Dec 2005, moved 22 Feb 2012 [rickr] */
 
+#ifndef TINY_NUMBER
+/*! A very tiny, infinitessimal number */
+#  define TINY_NUMBER 1E-10
+#endif
 
-#define TINY_NUMBER 1E-10
 /* minimum probability (0.0-1.0) to consider with probabilistic atlases */
 static float wami_min_prob = -1.0;
 
@@ -913,7 +919,7 @@ THD_fvec3 THD_mni__tta_N27( THD_fvec3 mv, int dir )
    /* Meth 2, xform in code, more fool proof*/
    if (!ww) {
       /* load the transform */
-      ww = myXtNew( THD_talairach_12_warp ) ;
+      ww = myRwcNew( THD_talairach_12_warp ) ;
       ww->type = WARP_TALAIRACH_12_TYPE;
       ww->resam_type = 0;
       for (iw=0; iw < 12; ++iw) {
@@ -1150,18 +1156,34 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
    int dec_places = 1;
    char histart[16],hiend[16], hmarkstart[16], hmarkend[16];
 
+   int biggg=0 ;                          /* HTML flourishes by RWCox */
+   const char *nbsp  = " &nbsp; " ;
+   const char *nbspp = " &nbsp;&nbsp; " ;
+
    ENTRY("genx_Atlas_Query_to_String") ;
    if (!wami) {
       ERROR_message("NULL wami");
       RETURN(rbuf);
    }
 
+   { char *eee ; /* 06 Nov 2018 [RWCox] */
+                       eee = getenv("AFNI_TTATLAS_FONTSIZE") ;
+     if( eee == NULL ) eee = getenv("AFNI_FONTSIZE") ;
+     biggg = ( eee != NULL && toupper(*eee) == 'B' ) ;
+   }
+
    /* indent with HTML encoding for web output */
    if(AFNI_wami_output_mode()){
-      sprintf(histart,"<h4><dd>");
-      sprintf(hiend,"</dd></h4>");
-      sprintf(hmarkstart,"<h3><p><b>");
-      sprintf(hmarkend, "</h3></b>");
+      if( biggg ){
+        sprintf(hmarkstart,"     <h2><b>");
+        sprintf(histart,"      <h3>");
+      } else {
+        sprintf(hmarkstart,"     <h4><b>");
+        sprintf(histart,"      <h5>");
+      }
+      sprintf(hiend,"<br>");
+      /* these strings go around the html fields for focus point and atlas lines */
+      sprintf(hmarkend, "</b><br>");
   }
    else{
       histart[0] = '\0';
@@ -1235,18 +1257,18 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
 
       sprintf(ylab[i],"%s mm [%c]",y_fstr,(acl[i].y<0.0)?'A':'P') ;
       sprintf(zlab[i],"%s mm [%c]",z_fstr,(acl[i].z<0.0)?'I':'S') ;
-      if((strcmp(acl[i].space_name,"MNI")==0) && (show_neurosynth_link() ||
-         show_sumsdb_link() )) {
+      if((strcmp(acl[i].space_name,"MNI")==0) && AFNI_wami_output_mode() &&
+         (show_neurosynth_link() || show_sumsdb_link() )) {
           /* make sure there's a blank string to start */
           sumsdb_link_str[0] = '\0';
           neurosynth_link_str[0] = '\0';
           if(show_sumsdb_link()){
-              sprintf(sumsdb_link_str, "<a href=\"%s\">SumsDB</a>",
-                   sumsdb_coords_link(-acl[i].x, -acl[i].y, acl[i].z));
+              sprintf(sumsdb_link_str, "%s <a href=\"%s\">SumsDB</a>",
+                   nbsp,sumsdb_coords_link(-acl[i].x, -acl[i].y, acl[i].z));
           }
           if(show_neurosynth_link())
-              sprintf(neurosynth_link_str, "<a href=\"%s\">NeuroSynth</a>",
-                   neurosynth_coords_link(-acl[i].x, -acl[i].y, acl[i].z));
+              sprintf(neurosynth_link_str, "%s <a href=\"%s\">NeuroSynth</a>",
+                   nbsp,neurosynth_coords_link(-acl[i].x, -acl[i].y, acl[i].z));
 
           sprintf(clab[i],"{MNI} %s %s", neurosynth_link_str, sumsdb_link_str);
       }
@@ -1267,7 +1289,7 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
       case CLASSIC_WAMI_ZONE_SORT:
             SS('m');
             if(AFNI_wami_output_mode()){
-               sprintf(lbuf, "%s<b>Focus point (LPI)=%c</b>%s", hmarkstart,
+               sprintf(lbuf, "%s<b>Focus point (LPI) = %c</b>%s", hmarkstart,
                   lsep,hmarkend);
             }
             else
@@ -1329,8 +1351,8 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                   for (il=0; il<wami->zone[iq]->N_label; ++il) {
                      if((wami->zone[iq]->connpage[il]) &&
                         (strcmp(wami->zone[iq]->connpage[il],"")!=0))
-                        sprintf(connbuf, "<a href=\"%s\">connections</a>",
-                            wami->zone[iq]->connpage[il]);
+                        sprintf(connbuf, "%s <a href=\"%s\">connections</a>",
+                            nbsp,wami->zone[iq]->connpage[il]);
                      else
                         sprintf(connbuf," ");
 
@@ -1350,8 +1372,8 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                                  (strcmp(wami->zone[iq]->webpage[il],"")!=0))
                               {
                                  sprintf(lbuf,
-                                 "%s      Focus point: <a href=\"%s\">%s</a>  %s%s",
-                                    histart,
+                                 "%s      Focus point: %s <a href=\"%s\">%s</a>  %s%s",
+                                    histart,nbsp,
                                     wami->zone[iq]->webpage[il],
                                     Clean_Atlas_Label(wami->zone[iq]->label[il]),
                                     connbuf,
@@ -1359,8 +1381,8 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                               }
                               else
                                  sprintf(lbuf,
-                                "%s   Focus point: %s%s",
-                                    histart,
+                                "%s   Focus point: %s%s%s",
+                                    histart,nbsp,
                                     Clean_Atlas_Label(wami->zone[iq]->label[il]),
                                     hiend);
                            } else {
@@ -1370,18 +1392,18 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                                  (strcmp(wami->zone[iq]->webpage[il],"")!=0))
                               {
                                  sprintf(lbuf,
-                                 "%s      Within %1d mm: <a href=\"%s\">%s</a>  %s%s",
+                                 "%s * Within %1d mm: %s <a href=\"%s\">%s</a>  %s%s",
                                     histart,
-                                    (int)wami->zone[iq]->radius[il],
+                                    (int)wami->zone[iq]->radius[il], nbsp,
                                     wami->zone[iq]->webpage[il],
                                     Clean_Atlas_Label(wami->zone[iq]->label[il]),
                                     connbuf,
                                     hiend);
                               }
                               else
-                                 sprintf(lbuf, "%s   Within %1d mm: %s%s",
+                                 sprintf(lbuf, "%s * Within %1d mm: %s%s%s",
                                     histart,
-                                    (int)wami->zone[iq]->radius[il],
+                                    (int)wami->zone[iq]->radius[il], nbsp,
                                     Clean_Atlas_Label(wami->zone[iq]->label[il]),
                                     hiend);
                            }
@@ -1393,15 +1415,15 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                               (strcmp(wami->zone[iq]->webpage[il],"")!=0))
                            {
                               sprintf(lbuf,
-                              "%s      -AND-: <a href=\"%s\">%s</a>  %s%s",
-                                 histart,
+                              "%s%s      -AND-%s <a href=\"%s\">%s</a>  %s%s",
+                                 histart,nbspp,
                                  wami->zone[iq]->webpage[il],
                                  Clean_Atlas_Label(wami->zone[iq]->label[il]),
                                  connbuf,
                                  hiend);
                            }
                            else
-                              sprintf(lbuf, "%s          -AND- %s%s", histart,
+                              sprintf(lbuf, "%s%s          -AND-%s %s%s", histart,nbspp,nbsp,
                                  Clean_Atlas_Label(wami->zone[iq]->label[il]), hiend);
                         }
 
@@ -1434,8 +1456,8 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
                if (wami->zone[iq]->level == 0) {
                   SS('w');sprintf(lbuf, "%sFocus point:%s", histart, hiend);
                } else {
-                  SS('x');sprintf(lbuf, "%sWithin %1d mm:%s",histart,
-                                 (int)wami->zone[iq]->level, hiend);
+                  SS('x');sprintf(lbuf, "%s * Within %1d mm:%s%s",histart,
+                                 (int)wami->zone[iq]->level,nbsp, hiend);
                }
                ADDTO_SARR(sar,lbuf);
                for (il=0; il<wami->zone[iq]->N_label; ++il) { /* il */
@@ -1544,17 +1566,19 @@ char * genx_Atlas_Query_to_String (ATLAS_QUERY *wami,
       }
    } else {
       /*- HTML -*/
+      char *hhh = biggg ? "h1" : "h3" ;
       rbuf =  THD_zzprintf(rbuf,"<head>\n"
-               "<center><title>AFNI whereami</title></center>\n"
+               "<center><title><%s>AFNI whereami</%s></title></center>\n"
                "</head>\n"
                "<body>\n"
-               "<hr><p>\n");
+               "<hr><p>\n" , hhh,hhh
+               );
 #if 0
                "<a name=\"top\"></a>\n"
-               "<center><h3>whereami report\n"
-               " </h3></center>\n"
+               "<center><%s>whereami report\n"
+               " </%s></center>\n"
                "<hr><p>\n"
-               "\n");
+               "\n"       , hhh,hhh );
 #endif
 
       /* render each line of the string array,sar, in HTML */
@@ -1660,17 +1684,18 @@ neurosynth_coords_link(float x, float y, float z)
    return(neurosynthpage);
 }
 
-/* show links out to neurosynth.org */
+/* show links out to sumsdb at washu */
+/* unfortunately, they stopped this service in 2016 at some point DRG - 08 Nov 2017 */
 int
 show_sumsdb_link()
 {
   if(sumsdb_link >=0)
      return(sumsdb_link);
 
-  if (AFNI_noenv("AFNI_SUMSDB"))
-     sumsdb_link = 0;
-  else
+  if (AFNI_yesenv("AFNI_SUMSDB"))
      sumsdb_link = 1;
+  else
+     sumsdb_link = 0;
   return(sumsdb_link);
 }
 
@@ -1707,15 +1732,17 @@ char * get_linkrbrain_site(void)
 /*--------------------------------------------------------------------*/
 
 /* show links out to linkrbrain */
+/* linkrbrain server has been down for quite a while. 
+ * Default to not try - DRG 08 Nov 2017 */
 int
 show_linkrbrain_link()
 {
   if(linkrbrain_link >=0)
      return(linkrbrain_link);
-  if( AFNI_noenv("AFNI_LINKRBRAIN") )  /* 01 Oct 2015 */
-     linkrbrain_link = 0;
-  else
+  if( AFNI_yesenv("AFNI_LINKRBRAIN") )  /* 01 Oct 2015 */
      linkrbrain_link = 1;
+  else
+     linkrbrain_link = 0;
   return(linkrbrain_link);
 }
 
@@ -3454,6 +3481,7 @@ void Set_Show_Atlas_Mode(int md)
    AtlasShowMode = md;
    return;
 }
+
 void Show_Atlas_Region (AFNI_ATLAS_REGION *aar)
 {
    int k = 0;
@@ -3479,7 +3507,11 @@ void Show_Atlas_Region (AFNI_ATLAS_REGION *aar)
       }
       fprintf(stdout,"\n");
    } else {
-      fprintf(stdout,"%c:%s:%-3d\n",
+      if((aar->longname) && (strlen(aar->longname)!=0))
+         fprintf(stdout,"%c:%s:%-3d [%s]\n",
+                     aar->side, STR_PRINT(aar->orig_label), aar->id, aar->longname);
+      else
+         fprintf(stdout,"%c:%s:%-3d\n",
                      aar->side, STR_PRINT(aar->orig_label), aar->id);
    }
 
@@ -3507,6 +3539,7 @@ AFNI_ATLAS_REGION * Free_Atlas_Region (AFNI_ATLAS_REGION *aar)
 
    if (aar->orig_label) free(aar->orig_label);
    if (aar->atlas_name) free(aar->atlas_name);
+   if (aar->longname) free(aar->longname);
    free(aar);
 
    RETURN(NULL);
@@ -3528,7 +3561,7 @@ byte Same_Chunks(AFNI_ATLAS_REGION *aar1, AFNI_ATLAS_REGION *aar2)
 /*!
    given a string, chunk it
 */
-AFNI_ATLAS_REGION * Atlas_Chunk_Label(char *lbli, int id, char *atlas_name)
+AFNI_ATLAS_REGION * Atlas_Chunk_Label(char *lbli, int id, char *atlas_name, char *longname)
 {
    AFNI_ATLAS_REGION *aar = NULL;
    char lachunk[500], sd, *lbl = NULL;
@@ -3553,6 +3586,8 @@ AFNI_ATLAS_REGION * Atlas_Chunk_Label(char *lbli, int id, char *atlas_name)
    aar = (AFNI_ATLAS_REGION*) calloc(1,sizeof(AFNI_ATLAS_REGION));
    aar->side = 'u';
    aar->orig_label = strdup(lbl);
+   if(longname) aar->longname = strdup(longname);
+   else  aar->longname = NULL;
    aar->atlas_name = NULL;
    if (atlas_name) aar->atlas_name = nifti_strdup(atlas_name); /* for clarity*/
    aar->id = id;
@@ -3698,7 +3733,8 @@ AFNI_ATLAS *Build_Atlas (char *aname, ATLAS_LIST *atlas_list)
    for (k=0; k<aa->N_regions; ++k) {
       aa->reg[k] = Atlas_Chunk_Label(atlas->adh->apl2->at_point[k].name,
                                      atlas->adh->apl2->at_point[k].tdval,
-                                     Atlas_Name(atlas));
+                                     Atlas_Name(atlas),
+                                     atlas->adh->apl2->at_point[k].longname);
       /* Show_Atlas_Region (aa->reg[k]); */
    }
 
@@ -3847,7 +3883,7 @@ AFNI_ATLAS_REGION *ROI_String_Decode(char *str, ATLAS_LIST *atlas_list)
       fprintf(stderr,"lbl from %s(%d to %d) is : '%s'\n", str, shft, nc, lbl);
 
    /* Now get aar */
-   if (!(aar = Atlas_Chunk_Label(lbl, 0, atlas_name))) {
+   if (!(aar = Atlas_Chunk_Label(lbl, 0, atlas_name,NULL))) {
       if (LocalHead || SpeakEasy) ERROR_message("Failed in processing label");
       RETURN(aar) ;
    }
@@ -3888,9 +3924,17 @@ char *Report_Found_Regions(AFNI_ATLAS *aa, AFNI_ATLAS_REGION *ur ,
    /* do we have a search by number ? */
    if (ur->id > 0 && ur->N_chnks == 0) {
       if (as->nmatch) {
-         snprintf (lbuf, 480*sizeof(char),
+         if((ur->longname) && (strlen(ur->longname)!=0))
+            snprintf (lbuf, 480*sizeof(char),
+                     "Best match for %s [%s] (code %-3d):", ur->orig_label, ur->longname, ur->id);
+         else
+            snprintf (lbuf, 480*sizeof(char),
                      "Best match for %s (code %-3d):", ur->orig_label, ur->id);
          for (ii=0; ii<as->nmatch; ++ii) {
+            if((aa->reg[as->iloc[ii]]->longname) && (strlen(aa->reg[as->iloc[ii]]->longname)!=0))
+                snprintf (lbuf, 480*sizeof(char), "%s\n   %s [%s]", lbuf,
+                     aa->reg[as->iloc[ii]]->orig_label, aa->reg[as->iloc[ii]]->longname);
+            else
             snprintf (lbuf, 480*sizeof(char), "%s\n   %s", lbuf,
                      aa->reg[as->iloc[ii]]->orig_label);
          }
@@ -4232,7 +4276,7 @@ char *approx_string_diff_info(APPROX_STR_DIFF *D, APPROX_STR_DIFF_WEIGHTS *Dwi)
 {
    static char res[10][512];
    static int icall=-1;
-   char sbuf[32];
+   char sbuf[40];
    int i;
 
    if (!Dwi) Dwi = init_str_diff_weights(Dwi);
@@ -5773,6 +5817,10 @@ char * Atlas_Code_String(int c)
 
 }
 
+/* this function strips off trailing periods ......
+ * and puts the result in a static string.
+ * this was relevant for the original hard coded atlases like the Talairach Daemon
+* not so interesting today */
 char * Clean_Atlas_Label( char *lb)
 {
    static char lab_buf[256];
@@ -6724,11 +6772,79 @@ char *NoLeftRight (char *name)
    else RETURN(name);
 }
 
+
+/* get atlas name type - show either short name, long name or both together
+ * This applies to individual region labels like
+*   amyl, amygdala or "amyl amygdala" */ 
+int Atlas_name_type()
+{
+   char *nametype;
+
+   /* see if type is already set. Use environment only once */
+   if(atlas_name_code!=-1)
+      return(atlas_name_code);
+
+   /* maybe name something else? */
+   nametype = my_getenv("AFNI_ATLAS_NAME_TYPE");
+ 
+//   atlas_name_code = 0;
+   atlas_name_code = 2;  /* make default - show both name - short name and long name */
+
+   if(nametype!=NULL) {
+      if(!strcasecmp(nametype, "longname")) {
+         atlas_name_code = 1;
+      }
+      else if(!strcasecmp(nametype, "bothnames"))
+         atlas_name_code = 2;
+      else if(!strcasecmp(nametype, "name"))
+         atlas_name_code = 0;
+   }
+
+   return(atlas_name_code);
+}
+
+void set_atlas_name_code(int code)
+{
+   atlas_name_code = code;
+}
+
+/* return region name, long region name, or both combined */
+char *Atlas_name_choice(ATLAS_POINT *atp)
+{
+   static char tmps[600];
+
+   /* get environment setting for name, long name or both names */
+   switch(Atlas_name_type()){
+     /* just the long name */ 
+      case 1:
+          if (atp->longname && strlen(atp->longname))          
+             sprintf(tmps, "%s", atp->longname);
+          else
+             sprintf(tmps, "%s", atp->name);               
+          break;
+      /* combination - both name and long name with brackets around long name*/
+      case 2:
+          if (atp->longname && strlen(atp->longname))
+             sprintf(tmps, "%s [%s]", atp->name, atp->longname);
+          else
+             sprintf(tmps, "%s", atp->name);               
+          break;
+      /* just the short, original name */
+      case 0:
+      default:
+          sprintf(tmps, "%s", atp->name);
+   }
+
+   return(tmps);
+}
+
 /* See also atlas_key_label */
+/* this function used only by whereami overlap mask computation for now */
 const char *Atlas_Val_Key_to_Val_Name(ATLAS *atlas, int tdval)
 {
    int ii, cmax = 600;
    static char tmps[600];
+   ATLAS_POINT *aptr;
 
    ENTRY("Atlas_Val_Key_to_Val_Name");
 
@@ -6746,13 +6862,19 @@ const char *Atlas_Val_Key_to_Val_Name(ATLAS *atlas, int tdval)
    if (!atlas->adh->duplicateLRentries) {
       /* quicky */
       if (tdval < MAX_ELM(atlas->adh->apl2)) {
-         if (atlas->adh->apl2->at_point[tdval].tdval == tdval)
-               RETURN(Clean_Atlas_Label(atlas->adh->apl2->at_point[tdval].name));
+         if (atlas->adh->apl2->at_point[tdval].tdval == tdval){
+               aptr = &atlas->adh->apl2->at_point[tdval];
+               RETURN(Atlas_name_choice(aptr));
+/*               RETURN(Clean_Atlas_Label(atlas->adh->apl2->at_point[tdval].name));*/
+         }
       }
       /* longy */
       for( ii=0 ; ii < MAX_ELM(atlas->adh->apl2) ; ii++ ) {
-         if (atlas->adh->apl2->at_point[ii].tdval == tdval)
-               RETURN(Clean_Atlas_Label(atlas->adh->apl2->at_point[ii].name));
+         if (atlas->adh->apl2->at_point[ii].tdval == tdval) {
+               aptr = &atlas->adh->apl2->at_point[ii];
+               RETURN(Atlas_name_choice(aptr));
+/*               RETURN(Clean_Atlas_Label(atlas->adh->apl2->at_point[ii].name));*/
+         }
       }
    } else {
       int fnd[30], nfnd =0;
@@ -6766,8 +6888,9 @@ const char *Atlas_Val_Key_to_Val_Name(ATLAS *atlas, int tdval)
       if ( nfnd == 0) RETURN(NULL);
 
       if ( nfnd == 1) {
-         RETURN(NoLeftRight(
-                Clean_Atlas_Label(atlas->adh->apl2->at_point[fnd[0]].name)));
+         aptr = &atlas->adh->apl2->at_point[fnd[0]];
+         RETURN(NoLeftRight(Atlas_name_choice(aptr)));
+/*                Clean_Atlas_Label(atlas->adh->apl2->at_point[fnd[0]].name)));*/
       }
 
       if (nfnd > 2) {
@@ -6779,7 +6902,7 @@ const char *Atlas_Val_Key_to_Val_Name(ATLAS *atlas, int tdval)
                   Clean_Atlas_Label(atlas->adh->apl2->at_point[fnd[ii]].name));
          }
       } else {
-         /* get ridd of the LR business */
+         /* get rid of the LR business */
          if (!strcmp(NoLeftRight(
                    Clean_Atlas_Label(atlas->adh->apl2->at_point[fnd[0]].name)),
                      NoLeftRight(
@@ -7255,7 +7378,7 @@ ATLAS_POINT_LIST *atlas_point_to_atlas_point_list(ATLAS_POINT * apl, int n_pts)
    for (i=0; i<n_pts; ++i) {
       NI_strncpy(apl2->at_point[i].name,apl[i].name,ATLAS_CMAX);
       NI_strncpy(apl2->at_point[i].sblabel,apl[i].sblabel,ATLAS_CMAX);
-
+      NI_strncpy(apl2->at_point[i].longname,apl[i].longname,ATLAS_CMAX);
       apl2->at_point[i].tdval = apl[i].tdval;
       apl2->at_point[i].okey = apl[i].okey;
       apl2->at_point[i].tdlev = apl[i].tdlev;
@@ -7368,7 +7491,8 @@ byte is_probabilistic_atlas(ATLAS *atlas) {
 }
 
 /* return the label associated with a key,
-   see also Atlas_Val_Key_to_Val_Name */
+   see also Atlas_Val_Key_to_Val_Name 
+*  main function to get label from index key*/
 char *atlas_key_label(ATLAS *atlas, int key, ATLAS_COORD *ac) {
    char *klab = NULL;
    int ii;
@@ -7377,7 +7501,8 @@ char *atlas_key_label(ATLAS *atlas, int key, ATLAS_COORD *ac) {
          if( key == atlas->adh->apl2->at_point[ii].tdval ) break ;
       }
       if( ii < MAX_ELM(atlas->adh->apl2) )  {          /* always true? */
-         klab = atlas->adh->apl2->at_point[ii].name;
+         // klab = atlas->adh->apl2->at_point[ii].name;
+         klab = Atlas_name_choice(&atlas->adh->apl2->at_point[ii]);
          if( atlas->adh->duplicateLRentries && ac ) {
                klab =
                   AddLeftRight( NoLeftRight(atlas->adh->apl2->at_point[ii].name),
@@ -8743,7 +8868,7 @@ char **atlas_chooser_formatted_labels(char *atname, int flipxy ) {
    at_labels = (char **) calloc(apl->n_points, sizeof(char*));
    for( ii=0 ; ii < apl->n_points ; ii++ ){
       at_labels[ii] = (char *) malloc( sizeof(char) * TTO_LMAX ) ;
-      sprintf( at_labels[ii] , TTO_FORMAT , apl->at_point[ii].name ,
+      sprintf( at_labels[ii] , TTO_FORMAT , Atlas_name_choice(&apl->at_point[ii]),
          sgnxy*(apl->at_point[ii].xx) , sgnxy*(apl->at_point[ii].yy) , apl->at_point[ii].zz ) ;
    }
 
@@ -9872,6 +9997,24 @@ char * atlas_suppinfo_connpage(ATLAS *atlas, char *blab)
     else
        sprintf(webpage, "%s%s.html", atlas->supp_conn_info, blab);
     return (webpage);
+}
+
+/* return longname, if available and environment requested, for atlas region blab
+ *  in newly allocated string */
+char * atlas_suppinfo_longname(ATLAS *atlas, char *blab)
+{
+/*    static char webpage[256];*/
+
+   char *longname, *slongptr;
+
+    if(Atlas_name_type() == 0) return(NULL);
+
+    longname = calloc(256,sizeof(char));
+    if(longname==NULL) return(NULL);
+    slongptr = atlas_point_long_name_named(atlas->adh->apl2, blab);
+    if(slongptr)
+       sprintf(longname, "%s", slongptr);
+    return (longname);
 }
 
 /* set minimum probabilty to use in probabilistic atlases */

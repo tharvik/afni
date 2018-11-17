@@ -2915,7 +2915,7 @@ void IW3D_interp( int icode ,
 /*---------------------------------------------------------------------------*/
 /* B(A(x)) where B = matrix, A = warp, icode = unused
    -- no interpolation is needed for this operation, since
-      the matrix B can just be applied to the the warp displacement from A
+      the matrix B can just be applied to the warp displacement from A
    -- 'w1m2' means 'warp #1, matrix #2'
 *//*-------------------------------------------------------------------------*/
 
@@ -4278,6 +4278,65 @@ ENTRY("THD_interp_floatim") ;
    EXRETURN ;
 }
 
+/*--------------------------------------------------------------------------*/
+/* interpolate from a complex-valued image to a set of indexes (ip,jp,kp) */
+
+void THD_interp_complexim( MRI_IMAGE *fim ,
+                           int np , float *ip , float *jp , float *kp ,
+                           int code, complex *outar )
+{
+   MRI_IMARR *rpair ;
+   MRI_IMAGE *rim , *iim , *aim , *bim ;
+   float     *rar , *iar ;
+   complex   *aar ;
+
+ENTRY("THD_interp_complexim") ;
+
+   /* split input into float pair */
+
+   rpair = mri_complex_to_pair( fim ) ;
+   if( rpair == NULL ) EXRETURN ;
+   aim = IMARR_SUBIM(rpair,0) ;
+   bim = IMARR_SUBIM(rpair,1) ;
+
+   /* make float images for outputs */
+
+   rim = mri_new_conforming( fim , MRI_float ) ; rar = MRI_FLOAT_PTR(rim) ;
+   iim = mri_new_conforming( fim , MRI_float ) ; iar = MRI_FLOAT_PTR(iim) ;
+
+   /* interpolate into these new images */
+
+   switch( code ){
+     case MRI_NN:      GA_interp_NN     ( aim, np,ip,jp,kp, rar ) ;
+                       GA_interp_NN     ( bim, np,ip,jp,kp, iar ) ; break ;
+     case MRI_LINEAR:  GA_interp_linear ( aim, np,ip,jp,kp, rar ) ;
+                       GA_interp_linear ( bim, np,ip,jp,kp, iar ) ; break ;
+     case MRI_CUBIC:   GA_interp_cubic  ( aim, np,ip,jp,kp, rar ) ;
+                       GA_interp_cubic  ( bim, np,ip,jp,kp, iar ) ; break ;
+     default:
+     case MRI_QUINTIC: GA_interp_quintic( aim, np,ip,jp,kp, rar ) ;
+                       GA_interp_quintic( bim, np,ip,jp,kp, iar ) ; break ;
+     case MRI_WSINC5:  GA_interp_wsinc5 ( aim, np,ip,jp,kp, rar ) ;
+                       GA_interp_wsinc5 ( bim, np,ip,jp,kp, iar ) ; break ;
+   }
+
+   /* toss the input pair */
+
+   DESTROY_IMARR(rpair) ;
+
+   /* convert output pair to single complex image */
+
+   aim = mri_pair_to_complex( rim , iim ) ; mri_free(rim) ; mri_free(iim) ;
+
+   /* copy that data to the user-provided output array */
+
+   aar = MRI_COMPLEX_PTR(aim) ;
+   memcpy( outar , aar , sizeof(complex)*np ) ;
+   mri_free(aim) ;
+
+   EXRETURN ;
+}
+
 /*----------------------------------------------------------------------------*/
 /* Apply a warp to a source image 'sim', and stick values into output 'fim'.
    Apply to a sub-volume ibot..itop, jbot..jtop, kbot..ktop (inclusive).
@@ -5558,6 +5617,7 @@ ENTRY("THD_nwarp_dataset") ;
      }
      if( verb_nww && iv == 0 ) fprintf(stderr,"++ Warping dataset: ") ;
      THD_interp_floatim( fim, nxyz,ip,jp,kp, dincode, MRI_FLOAT_PTR(wim) ) ;
+#if 0
      if( MRI_HIGHORDER(dincode) ){ /* clipping */
        double_pair fmm = mri_minmax(fim) ;
        float fb=(float)fmm.a , ft=(float)fmm.b ; int qq ;
@@ -5566,6 +5626,7 @@ ENTRY("THD_nwarp_dataset") ;
          if( war[qq] < fb ) war[qq] = fb ; else if( war[qq] > ft ) war[qq] = ft ;
        }
      }
+#endif
      EDIT_substitute_brick( dset_out , iv , MRI_float , MRI_FLOAT_PTR(wim) ) ;
      mri_clear_and_free(wim) ; mri_free(fim) ;
      if( nya > 1 ){ DESTROY_IMARR(im_src) ; }  /* will be re-computed */
@@ -5613,13 +5674,19 @@ ENTRY("THD_nwarp_dataset_array") ;
 
    for( kds=0 ; kds < numds ; kds++ ){         /* loop over input datasets */
      dset_sss = DSET_IN_3DARR(dset_src,kds) ;
+     if( verb_nww > 1 )
+       INFO_message("Loading '%s' for warping",DSET_HEADNAME(dset_sss)) ;
      DSET_load(dset_sss) ;
+     if( verb_nww > 1 )
+       ININFO_message(" DSET_LOAD returns") ;
      if( !DSET_LOADED(dset_sss) ){
        ERROR_message("Can't load dataset '%s' for warping",DSET_HEADNAME(dset_sss)) ;
        RETURN(NULL) ;
      }
      if( kds == 0 ){     /* get first dataset's geometry */
        gs = EDIT_get_geometry_string(dset_sss) ;
+       if( verb_nww > 1 )
+         ININFO_message(" dataset geometry = %s",gs) ;
      } else {            /* check later datasets to see if they match */
        hs = EDIT_get_geometry_string(dset_sss) ;
        if( EDIT_geometry_string_diff(gs,hs) > 0.01f ){
@@ -5632,6 +5699,7 @@ ENTRY("THD_nwarp_dataset_array") ;
      nvals = DSET_NVALS(dset_sss) ; if( nvals > nvmax ) nvmax = nvals ;
      if( !ISVALID_MAT44(dset_sss->daxes->ijk_to_dicom) )
        THD_daxes_to_mat44(dset_sss->daxes) ;
+     NI_sleep(1) ;
    }
    free(gs) ; gs = hs = NULL ;
 
@@ -5685,6 +5753,8 @@ ENTRY("THD_nwarp_dataset_array") ;
      dset_sss = DSET_IN_3DARR(dset_src,kds) ;
      nvals = DSET_NVALS(dset_sss) ; if( nvals > nvmax ) nvals = nvmax ;
      dset_ooo = EDIT_empty_copy( dset_mast ) ;
+     if( verb_nww > 1 )
+       ININFO_message(" creating empty output dataset '%s'",prefix[kds]) ;
      EDIT_dset_items( dset_ooo ,
                         ADN_prefix    , prefix[kds] ,
                         ADN_nvals     , nvals ,
@@ -5712,6 +5782,7 @@ ENTRY("THD_nwarp_dataset_array") ;
      THD_daxes_to_mat44(dset_ooo->daxes) ;           /* save coord transforms */
 
      ADDTO_3DARR(dset_out,dset_ooo) ;
+     NI_sleep(1) ;
    }
 
    nx = DSET_NX(dset_mast) ;  /* 3D grid sizes */
@@ -5719,12 +5790,13 @@ ENTRY("THD_nwarp_dataset_array") ;
    nz = DSET_NZ(dset_mast) ; nxyz = nx*ny*nz ;
 
    vp = 1 + (nvmax/50) ;              /* how often to print a '.' progress meter */
-   if( verb_nww ) fprintf(stderr,"++ Warping: ") ;  /* start progress meter */
+   if( verb_nww ) fprintf(stderr,"++ Warping:") ;  /* start progress meter */
 
    /****** Loop over output sub-bricks,
            create the warp dataset for that 'time' index, then apply it *****/
 
 #ifdef DEBUG_CATLIST
+NI_sleep(1) ;
 if( verb_nww > 1 ) fprintf(stderr,"[nvar=%d]",nwc->nvar) ;
 #endif
 
@@ -5736,7 +5808,7 @@ if( verb_nww > 1 ) fprintf(stderr,"[nvar=%d]",nwc->nvar) ;
                                   /* end of 'time' inside nwc */
        /*** toss the old warps */
 #ifdef DEBUG_CATLIST
-if( verb_nww > 1 ) fprintf(stderr,"a") ;
+if( verb_nww > 1 ) fprintf(stderr," a") ;
 #endif
        DSET_delete  (dset_nwarp) ; DSET_delete  (dset_qwarp) ;
        DESTROY_IMARR(imar_nwarp) ; DESTROY_IMARR(imar_src  ) ;
@@ -5805,39 +5877,49 @@ if( verb_nww > 1 ) fprintf(stderr,"d") ;
 
      for( kds=0 ; kds < numds ; kds++ ){  /* loop over input datasets */
        dset_sss = DSET_IN_3DARR(dset_src,kds) ;
-       if( DSET_NVALS(dset_sss) < iv ) continue ;  /* this one is done already */
+       if( DSET_NVALS(dset_sss) < iv ) continue ;  /* dataset is done already */
+       dset_ooo = DSET_IN_3DARR(dset_out,kds) ;
 #ifdef DEBUG_CATLIST
 if( verb_nww > 1 ) fprintf(stderr,"-") ;
 #endif
-       fim = THD_extract_float_brick(iv,dset_sss) ; DSET_unload_one(dset_sss,iv) ;
-       wim = mri_new_vol(nx,ny,nz,MRI_float) ;
-       /*** the actual warping is done in the function below! ***/
+       if( DSET_BRICK_TYPE(dset_sss,iv) != MRI_complex ){
+         fim = THD_extract_float_brick(iv,dset_sss) ; DSET_unload_one(dset_sss,iv) ;
+         wim = mri_new_vol(nx,ny,nz,MRI_float) ;
+         /*** the actual warping is done in the function below! ***/
 #ifdef DEBUG_CATLIST
 if( verb_nww > 1 ) fprintf(stderr,"+") ;
 #endif
-       THD_interp_floatim( fim, nxyz,ip,jp,kp, dincode, MRI_FLOAT_PTR(wim) ) ;
+         THD_interp_floatim( fim, nxyz,ip,jp,kp, dincode, MRI_FLOAT_PTR(wim) ) ;
 
-       if( MRI_HIGHORDER(dincode) ){ /* clipping output values */
-         double_pair fmm = mri_minmax(fim) ;
-         float fb=(float)fmm.a , ft=(float)fmm.b ; int qq ;
-         float *war=MRI_FLOAT_PTR(wim) ;
+#if 0
+         if( MRI_HIGHORDER(dincode) ){ /* clipping output values */
+           double_pair fmm = mri_minmax(fim) ;
+           float fb=(float)fmm.a , ft=(float)fmm.b ; int qq ;
+           float *war=MRI_FLOAT_PTR(wim) ;
 #ifdef DEBUG_CATLIST
 if( verb_nww > 1 ) fprintf(stderr,"*") ;
 #endif
-         for( qq=0 ; qq < wim->nvox ; qq++ ){
-           if( war[qq] < fb ) war[qq] = fb ; else if( war[qq] > ft ) war[qq] = ft ;
+           for( qq=0 ; qq < wim->nvox ; qq++ ){
+             if( war[qq] < fb ) war[qq] = fb ; else if( war[qq] > ft ) war[qq] = ft ;
+           }
          }
-       }
-#ifdef DEBUG_CATLIST
-if( verb_nww > 1 ) fprintf(stderr,"/") ;
 #endif
-       dset_ooo = DSET_IN_3DARR(dset_out,kds) ;
-       EDIT_substitute_brick( dset_ooo , iv , MRI_float , MRI_FLOAT_PTR(wim) ) ;
+         EDIT_substitute_brick( dset_ooo, iv, MRI_float, MRI_FLOAT_PTR(wim) ) ;
+         mri_free(fim) ;                           /* is a copy, so delete it */
+       } else {  /* <<<-------------------------- complex image [27 Mar 2018] */
+         fim = DSET_BRICK(dset_sss,iv) ;
+         wim = mri_new_vol(nx,ny,nz,MRI_complex) ;
+#ifdef DEBUG_CATLIST
+if( verb_nww > 1 ) fprintf(stderr,"+") ;
+#endif
+         THD_interp_complexim( fim, nxyz,ip,jp,kp, dincode, MRI_COMPLEX_PTR(wim) ) ;
+         EDIT_substitute_brick( dset_ooo, iv, MRI_complex, MRI_COMPLEX_PTR(wim) ) ;
+         /* fim here is NOT a copy, so don't delete it */
+       }
 #ifdef DEBUG_CATLIST
 if( verb_nww > 1 ) fprintf(stderr,"!") ;
 #endif
        mri_clear_and_free(wim) ;  /* clear and free won't delete the data, just the shell */
-       mri_free(fim) ;            /* this, on the other hand, is totally destroyed */
      } /* end of loop over input datasets */
 
      if( verb_nww && iv%vp == 0 ) fprintf(stderr,".") ;  /* progress meter */
@@ -5846,7 +5928,7 @@ if( verb_nww > 1 ) fprintf(stderr,"!") ;
 
    /* toss the final warps */
 #ifdef DEBUG_CATLIST
-if( verb_nww > 1 ) fprintf(stderr,"z") ;
+if( verb_nww > 1 ) fprintf(stderr," z") ;
 #endif
    DSET_delete  (dset_nwarp) ; DSET_delete  (dset_qwarp) ;
    DESTROY_IMARR(imar_nwarp) ; DESTROY_IMARR(imar_src  ) ;
@@ -7696,7 +7778,7 @@ if( verb_nww > 1 && ii > 0 ) ININFO_message("Reduced catlist by %d steps",ii) ;
     MRI_IMAGEs as the inputs, not datasets.
 
     3dQwarp is *supposed* to work with 2D images (nz=1), and there is code
-    to allow for that case -- but it has never been tested!
+    to allow for that case -- but it has never been tested! (OK, once.)
 
     The INCOR_* functions are in thd_incorrelate.c (which is #include-d far
     far above), and handle "incomplete correlation" calculations, where part
@@ -7848,6 +7930,7 @@ static int          Hforce      = 0    ; /* force an iterative warp update? */
 static int          Hzeasy      = 0    ; /* take it easy at the zero level? */
 static int          Hznoq       = 0    ; /* don't do quintic warp at the zero level? */
 static float        Hfactor     = 0.44f; /* fraction of maximum warp size allowed */
+static float        Hfactor_q   = 1.0f ; /* used in 3dQwarp */
 static float        Hshrink     = 0.749999f ; /* shrink factor for patches between levels */
 static int          Hngmin      = 25 ;   /* min patch size allowed in current run */
 static IndexWarp3D *Haawarp     = NULL ; /* global warp we are improving = A(x) */
@@ -7895,6 +7978,9 @@ static int           Hsave_allwarps = 0 ;    /* 02 Jan 2015 */
 static int           Hsave_num      = 0 ;
 static IndexWarp3D **Hsave_iwarp    = NULL ;
 static char        **Hsave_iname    = NULL ;
+
+static void (*Hsave_callback_func)(IndexWarp3D * , char *) = NULL ;  /* 13 Mar 2018 */
+
 #define HSAVE_DESTROY                                                         \
  do{ if( Hsave_num > 0 ){                                                     \
        if( Hsave_iwarp != NULL ){                                             \
@@ -7904,11 +7990,16 @@ static char        **Hsave_iname    = NULL ;
        }                                                                      \
        Hsave_num = 0 ;                                                        \
      } } while(0)
-#define HSAVE_ADDTO(iww,inn)                                                                   \
- do{ Hsave_iwarp = (IndexWarp3D **)realloc(Hsave_iwarp,sizeof(IndexWarp3D *)*(Hsave_num+1)) ;  \
-     Hsave_iname = (char        **)realloc(Hsave_iname,sizeof(char        *)*(Hsave_num+1)) ;  \
-     Hsave_iwarp[Hsave_num] = IW3D_copy(iww,1.0f) ;                                            \
-     Hsave_iname[Hsave_num] = strdup(inn) ; Hsave_num++ ;                                      \
+
+#define HSAVE_ADDTO(iww,inn)                                                                     \
+ do{ if( Hsave_callback_func != NULL ){                                                          \
+       Hsave_callback_func(iww,inn) ;                                                            \
+     } else {                                                                                    \
+       Hsave_iwarp = (IndexWarp3D **)realloc(Hsave_iwarp,sizeof(IndexWarp3D *)*(Hsave_num+1)) ;  \
+       Hsave_iname = (char        **)realloc(Hsave_iname,sizeof(char        *)*(Hsave_num+1)) ;  \
+       Hsave_iwarp[Hsave_num] = IW3D_copy(iww,1.0f) ;                                            \
+       Hsave_iname[Hsave_num] = strdup(inn) ; Hsave_num++ ;                                      \
+     }                                                                                           \
  } while(0)
 
 static int   Hfirsttime = 0 ;    /* for fun only (to print stuff out in cost func) */
@@ -7949,6 +8040,17 @@ static float Hcostt = 0.0f ;
 
 #undef  BASIM /* macro for which base image to use */
 #define BASIM ( (Hbasim_blur != NULL ) ? Hbasim_blur : Hbasim )
+
+/*---------- Code and variables for '-inedge' enhancement [Jul 2018] ---------*/
+
+#define ALLOW_INEDGE
+
+#ifdef ALLOW_INEDGE
+# include "mri_intedge.c"
+  static int   Hinedge_erode = 4 ;
+  static float Hinedge_frac  = 0.222f ;
+  static int   Hinedge_doit  = 0 ;
+#endif
 
 /*----------------------------------------------------------------------------*/
 /* Process the QUIT signal, as in 'kill -s QUIT <processID>' */
@@ -10238,6 +10340,8 @@ ENTRY("IW3D_cleanup_improvement") ;
    Hstopped  = 0 ;
    Hfinal    = 0 ;
 
+   HSAVE_DESTROY ;
+
    EXRETURN ;
 }
 
@@ -10388,13 +10492,20 @@ ENTRY("IW3D_setup_for_improvement") ;
    /*-- eliminate old stuff (if any) --*/
 
    IW3D_cleanup_improvement() ;
-   HSAVE_DESTROY ;  /* 02 Jan 2015 */
 
    /*-- copy base and source images --*/
 
    Hnx = bim->nx; Hny = bim->ny; Hnz = bim->nz; Hnxy=Hnx*Hny; Hnxyz = Hnxy*Hnz;
    Hbasim = mri_to_float(bim) ;
    Hsrcim = mri_to_float(sim);
+
+#ifdef ALLOW_INEDGE /* Jul 2018 */
+   if( Hinedge_doit ){
+     if( Hverb > 1 ) ININFO_message("  enhancing interior edges of base and source") ;
+     mri_interior_edgeize( Hbasim , Hinedge_erode , Hinedge_frac ) ;
+     mri_interior_edgeize( Hsrcim , Hinedge_erode , Hinedge_frac ) ;
+   }
+#endif
 
    if( Hpblur_b > 0.0f && Hblur_b == 0.0f ) Hblur_b = 0.1f ;
    if( Hpblur_s > 0.0f && Hblur_s == 0.0f ) Hblur_s = 0.1f ;
@@ -10575,7 +10686,24 @@ ENTRY("IW3D_setup_for_improvement") ;
    Also, keep up-to-date the copy of the warped source image Haasrcim.
 *//*--------------------------------------------------------------------------*/
 
+#define SC_BOX  1
 #define SC_BALL 2
+
+#define BALLOPT                                         \
+  do{ int bc = powell_newuoa_get_con() ;                \
+      if( bc != SC_BALL ){                              \
+        powell_newuoa_set_con_ball() ;                  \
+        if( Hverb > 1 ) fprintf(stderr,"[ballopt]\n") ; \
+      }                                                 \
+  } while(0)
+
+#define BOXOPT                                          \
+  do{ int bc = powell_newuoa_get_con() ;                \
+      if( bc != SC_BOX  ){                              \
+        powell_newuoa_set_con_box() ;                   \
+        if( Hverb > 1 ) fprintf(stderr,"[boxopt]\n") ;  \
+      }                                                 \
+  } while(0)
 
 int IW3D_improve_warp( int warp_code ,
                        int ibot, int itop, int jbot, int jtop, int kbot, int ktop )
@@ -10611,7 +10739,7 @@ ENTRY("IW3D_improve_warp") ;
 
    nball = (warp_code==MRI_CUBIC) ? 15 : 19 ;
    if( nxh < nball || nyh < nball || nzh < nball ){      /* 10 Feb 2017 */
-     powell_newuoa_set_con_ball() ; ballopt = 1 ;
+     ballopt = 1 ; BALLOPT ;
    }
 
    wbfar = MRI_FLOAT_PTR(Hwtim) ; wsum = 0.0f ;  /* sum of weights in the patch */
@@ -10670,7 +10798,7 @@ ENTRY("IW3D_improve_warp") ;
 
 #ifdef ALLOW_BASIS5  /* 05 Nov 2015 */
      case MRI_CUBIC_PLUS_1:  /* basis3 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_1 ;
        Hbasis_parmax = 0.0432*Hfactor ;
        Hnpar         = 81 ;
@@ -10679,7 +10807,7 @@ ENTRY("IW3D_improve_warp") ;
      break ;
 
      case MRI_CUBIC_PLUS_2:  /* basis4 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_2 ;
        Hbasis_parmax = 0.0222*Hfactor ;
        Hnpar         = 192 ;
@@ -10688,7 +10816,7 @@ ENTRY("IW3D_improve_warp") ;
      break ;
 
      case MRI_CUBIC_PLUS_3:  /* basis5 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_3 ;
        Hbasis_parmax = 0.0155*Hfactor ;
        Hnpar         = 375 ;
@@ -10945,6 +11073,7 @@ ENTRY("IW3D_warpomatic") ;
    IW3D_setup_for_improvement( bim, wbim, sim, WO_iwarp, meth_code, warp_flags ) ;
 
    /* compute range of indexes over which to warp */
+   /* imin..imax jmin..jmax kmin..kmax = autobox = contains all nonzeros */
 
    MRI_autobbox( Hwtim , &imin,&imax , &jmin,&jmax , &kmin,&kmax ) ;
 
@@ -10992,7 +11121,7 @@ ENTRY("IW3D_warpomatic") ;
      nlevr = ( WORKHARD(0) || SUPERHARD(0) || Hduplo ) ? 2 : 1 ;
 #endif
      /* force the warp to happen, but don't use any penalty */
-     Hforce = 1 ; Hfactor = 1.0f ; Hpen_use = 0 ; Hlev_now = 0 ;
+     Hforce = 1 ; Hfactor = Hfactor_q ; Hpen_use = 0 ; Hlev_now = 0 ;
      PBLUR_BASE  (ibbb,ittt,jbbb,jttt,kbbb,kttt) ;  /* progressive blur, if ordered */
      PBLUR_SOURCE(ibbb,ittt,jbbb,jttt,kbbb,kttt) ;
      mri_free(Haasrcim) ;                /* At this point, create the warped  */
@@ -11002,11 +11131,13 @@ ENTRY("IW3D_warpomatic") ;
        Haasrcim = IW3D_warp_floatim( Haawarp, SRCIM, Himeth , 1.0f ) ;
      if( Hverb == 1 ) fprintf(stderr,"lev=0 %d..%d %d..%d %d..%d: ",ibbb,ittt,jbbb,jttt,kbbb,kttt) ;
      /* always start with 2 cubic steps */
-     powell_newuoa_set_con_box() ;
+     BOXOPT ;
      (void)IW3D_improve_warp( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
+     if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
 #if 0
-     powell_newuoa_set_con_ball() ;
+     BALLOPT ;
      (void)IW3D_improve_warp( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
+     if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
 #endif
      if( SUPERHARD(0) )
        (void)IW3D_improve_warp( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
@@ -11015,8 +11146,8 @@ ENTRY("IW3D_warpomatic") ;
      else if( Hzeasy ) nlevr = 1 ;
      for( iii=0 ; iii < nlevr ; iii++ ){  /* and some quintic steps */
        Hcostold = Hcost ;
-       if( iii%2 == 0 ) powell_newuoa_set_con_box() ;
-       else             powell_newuoa_set_con_ball() ;
+       if( iii%2 == 0 ) BOXOPT ;
+       else             BALLOPT ;
        (void)IW3D_improve_warp( MRI_QUINTIC, ibbb,ittt,jbbb,jttt,kbbb,kttt );
        if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
        if( iii < nlevr-1 && Hcostold-Hcost < 0.00444f ){
@@ -11027,13 +11158,13 @@ ENTRY("IW3D_warpomatic") ;
      }
 #ifdef ALLOW_BASIS5
      if( (!Hznoq && !Hzeasy) && (H4zero || WORKHARD(0) || SUPERHARD(0)) ){
-       powell_newuoa_set_con_ball() ;
+       BALLOPT ;
        (void)IW3D_improve_warp( MRI_CUBIC_PLUS_2, ibbb,ittt,jbbb,jttt,kbbb,kttt );
      }
      if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
 #endif
      if( Hsave_allwarps ){           /* 02 Jan 2015 */
-       sprintf(warplab,"%04dx%04dx%04d",ittt-ibbb+1,jttt-jbbb+1,kttt-kbbb+1) ;
+       sprintf(warplab,"Lev0.%04dx%04dx%04d",ittt-ibbb+1,jttt-jbbb+1,kttt-kbbb+1) ;
        HSAVE_ADDTO(Haawarp,warplab) ;
      }
      if( Hverb == 1 ) fprintf(stderr," done [cost:%.5f==>%.5f]\n",Hfirstcost,Hcost) ;
@@ -11092,7 +11223,7 @@ ENTRY("IW3D_warpomatic") ;
      flev = (Hpen_old) ? 1.0f : powf( (float)(lev-levs+1) , 0.333f ) ; ;
      Hpen_fff = Hpen_fac * MIN(2.22f,flev) ;  /* 20 Sep 2013 */
 
-     Hpen_use = (Hpen_fff > 0.0f) ;
+     Hpen_use = (Hpen_fff > 0.0f) && (lev > 2) ;
 
      /* compute width of rectangles at this level */
 
@@ -11168,7 +11299,7 @@ ENTRY("IW3D_warpomatic") ;
 #define BBB 0.888f
      Hfactor = (1.0f-HHH) + HHH*powf(BBB,(float)(lev-1)) ;  /* max displacement allowed */
 #else
-     Hfactor = 1.0f ;  /* always allow full-size patch warps */
+     Hfactor = Hfactor_q ;  /* always allow full-size patch warps */
 #endif
 
      qmode = qmode2 = MRI_CUBIC ;  /* cubic patches from here on down */
@@ -11218,8 +11349,8 @@ ENTRY("IW3D_warpomatic") ;
         the purpose of this is so that one side of the box doesn't get favored */
 
      if( lev%2 == 1 || nlevr > 1 ){  /* sweep from bot to top, ijk order */
-           if( do_qfinal ) powell_newuoa_set_con_ball() ;
-      else if( nlevr > 1 ) powell_newuoa_set_con_box() ;
+           if( do_qfinal ) BALLOPT ;
+      else if( nlevr > 1 ) BOXOPT ;
       for( isup=0 ; isup < nsup ; isup++ ){  /* working superhard? do this twice! */
        for( kdon=0,kbot=kbbb ; !kdon ; kbot += dkkk ){  /* loop over z direction of patches */
          ktop = kbot+zwid-1;  /* top edge of patch: maybe edit it down or up */
@@ -11263,7 +11394,7 @@ ENTRY("IW3D_warpomatic") ;
 
      if( lev%2 == 0 || nlevr > 1 ){ /* sweep from top to bot, kji order */
        if( nlevr > 1 && Hverb == 1 ) fprintf(stderr,":[cost=%.5f]:",Hcost) ;
-       if( do_qfinal || nlevr > 1 ) powell_newuoa_set_con_ball() ;
+       if( do_qfinal || nlevr > 1 ) BALLOPT ;
        qmodeX = (nlevr > 1) ? qmode2 : qmode ;
       for( isup=0 ; isup < nsup ; isup++ ){  /* superhard? */
        for( idon=0,itop=ittt ; !idon ; itop -= diii ){
@@ -11306,8 +11437,8 @@ ENTRY("IW3D_warpomatic") ;
      /* at this point, we have just about finished with this level's patches */
 
      if( Hdone == 0 ){  /* if nothing was done at this level, try -something- */
-       ibot = (imin+imax-xwid)/2 ; if( ibot < 0 ) ibot = 0 ;
-       jbot = (jmin+jmax-ywid)/2 ; if( jbot < 0 ) jbot = 0 ;
+       ibot = (imin+imax-xwid)/2 ; if( ibot < 0 ) ibot = 0 ;   /* centered on */
+       jbot = (jmin+jmax-ywid)/2 ; if( jbot < 0 ) jbot = 0 ;   /* the autobox */
        kbot = (kmin+kmax-zwid)/2 ; if( kbot < 0 ) kbot = 0 ;
        itop = ibot+xwid-1        ; if( itop >= Hnx ) itop = Hnx-1 ;
        jtop = jbot+ywid-1        ; if( jtop >= Hny ) jtop = Hny-1 ;
@@ -11321,6 +11452,11 @@ ENTRY("IW3D_warpomatic") ;
 
      /* print some summary of what happened at this level */
 
+     if( Hsave_allwarps ){           /* 02 Jan 2015 */
+       sprintf(warplab,"Lev%d.%04dx%04dx%04d",lev,xwid,ywid,zwid) ;
+       HSAVE_ADDTO(Haawarp,warplab) ;
+     }
+
      if( Hcostbeg > 666.0f ) Hcostbeg = Hfirstcost ;
      if( Hverb == 1 ){
        if( Hdone > 0 )
@@ -11329,11 +11465,6 @@ ENTRY("IW3D_warpomatic") ;
          fprintf(stderr," done [cost:%.5f ; all patches skipped]\n",Hcost) ;
      }
      Hcostbeg = Hcost ;
-
-     if( Hsave_allwarps ){           /* 02 Jan 2015 */
-       sprintf(warplab,"%04dx%04dx%04d",xwid,ywid,zwid) ;
-       HSAVE_ADDTO(Haawarp,warplab) ;
-     }
 
    } /*-- end of loop over levels of refinement --*/
 
@@ -11491,7 +11622,7 @@ ENTRY("THD_warpomatic") ;
 
 #endif /*(Q8)*/ /*############################################################*/
 
-#if 1
+#ifdef ALLOW_DUPLO
 /*============================================================================*/
 /** (Q9) Functions for duplo-ing a warp or image (up and down in size)       **/
 /*============================================================================*/
@@ -11742,7 +11873,7 @@ MRI_IMAGE * mri_duplo_down_3D_NN( MRI_IMAGE *fim )
 
 #endif /*(Q9)*/ /*############################################################*/
 
-#if 1
+#ifdef ALLOW_DUPLO
 /*============================================================================*/
 /** (Q10) Function for warp optimization with duplo-ing                      **/
 /*============================================================================*/
@@ -12116,7 +12247,7 @@ int IW3D_improve_warp_plusminus( int warp_code ,
                                  int jbot, int jtop, int kbot, int ktop )
 {
    MRI_IMAGE *warpim ;
-   int nxh,nyh,nzh , ii,jj,kk , iter,itmax,qq,pp , nwb ;
+   int nxh,nyh,nzh , ii,jj,kk , iter,itmax,qq,pp , nwb , nball ;
    float *wbfar , wsum ; double prad ;
    double *parvec, *xbot,*xtop ;
    float *sarp,*sarm , *Axd,*Ayd,*Azd,*Aje,*Ase , *bxd,*byd,*bzd,*bje,*bse , jt,st ;
@@ -12142,6 +12273,11 @@ ENTRY("IW3D_improve_warp_plusminus") ;
 
    Hnval = nxh*nyh*nzh ;
 
+   nball = (warp_code==MRI_CUBIC) ? 15 : 19 ;
+   if( nxh < nball || nyh < nball || nzh < nball ){      /* 10 Feb 2017 */
+     ballopt = 1 ; BALLOPT ;
+   }
+
    wbfar = MRI_FLOAT_PTR(Hwtim) ; wsum = 0.0f ;
    for( nwb=0,kk=kbot ; kk <= ktop ; kk++ ){
      for( jj=jbot ; jj <= jtop ; jj++ ){
@@ -12165,10 +12301,10 @@ ENTRY("IW3D_improve_warp_plusminus") ;
      default:
      case MRI_CUBIC:
        Hbasis_code   = MRI_CUBIC ;                   /* 3rd order polynomials */
-       Hbasis_parmax = 0.033*Hfactor ;    /* max displacement from 1 function */
-       if( ballopt ) Hbasis_parmax = 0.066*Hfactor ;           /* 13 Jan 2015 */
+       Hbasis_parmax = 0.044*Hfactor ;    /* max displacement from 1 function */
+       if( ballopt ) Hbasis_parmax = 0.077*Hfactor ;           /* 13 Jan 2015 */
        Hnpar         = 24 ;                /* number of params for local warp */
-       prad          = 0.444 ;                       /* NEWUOA initial radius */
+       prad          = 0.333 ;                       /* NEWUOA initial radius */
        HCwarp_setup_basis( nxh,nyh,nzh, Hgflags ) ;      /* setup HCwarp_load */
 #ifdef USE_HLOADER
        Hloader       = HCwarp_load ;   /* func to make local warp from params */
@@ -12177,8 +12313,8 @@ ENTRY("IW3D_improve_warp_plusminus") ;
 
      case MRI_QUINTIC:
        Hbasis_code   = MRI_QUINTIC ;                 /* 5th order polynomials */
-       Hbasis_parmax = 0.007*Hfactor ;
-       if( ballopt ) Hbasis_parmax = 0.050*Hfactor ;           /* 13 Jan 2015 */
+       Hbasis_parmax = 0.0088*Hfactor ;
+       if( ballopt ) Hbasis_parmax = 0.066*Hfactor ;           /* 13 Jan 2015 */
        Hnpar         = 81 ;
        prad          = 0.333 ;
        HQwarp_setup_basis( nxh,nyh,nzh, Hgflags ) ;
@@ -12189,7 +12325,7 @@ ENTRY("IW3D_improve_warp_plusminus") ;
 
 #ifdef ALLOW_BASIS5  /* 05 Nov 2015 */
      case MRI_CUBIC_PLUS_1:  /* basis3 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_1 ;
        Hbasis_parmax = 0.0432*Hfactor ;
        Hnpar         = 81 ;
@@ -12198,7 +12334,7 @@ ENTRY("IW3D_improve_warp_plusminus") ;
      break ;
 
      case MRI_CUBIC_PLUS_2:  /* basis4 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_2 ;
        Hbasis_parmax = 0.0222*Hfactor ;
        Hnpar         = 192 ;
@@ -12207,7 +12343,7 @@ ENTRY("IW3D_improve_warp_plusminus") ;
      break ;
 
      case MRI_CUBIC_PLUS_3:  /* basis5 */
-       powell_newuoa_set_con_ball() ; ballopt = 1 ;
+       BALLOPT ; ballopt = 1 ;
        Hbasis_code = MRI_CUBIC_PLUS_3 ;
        Hbasis_parmax = 0.0155*Hfactor ;
        Hnpar         = 375 ;
@@ -12437,6 +12573,8 @@ ENTRY("IW3D_cleanup_improvement_plusminus") ;
    Hstopped  = 0 ;
    Hfinal    = 0 ;
 
+   HSAVE_DESTROY ;
+
    EXRETURN ;
 }
 
@@ -12460,6 +12598,14 @@ ENTRY("IW3D_setup_for_improvement_plusminus") ;
    Hnx = bim->nx; Hny = bim->ny; Hnz = bim->nz; Hnxy=Hnx*Hny; Hnxyz = Hnxy*Hnz;
    Hbasim = mri_to_float(bim) ;
    Hsrcim = mri_to_float(sim) ;
+
+#ifdef ALLOW_INEDGE /* Jul 2018 */
+   if( Hinedge_doit ){
+     if( Hverb > 1 ) ININFO_message("  enhancing interior edges of base and source") ;
+     mri_interior_edgeize( Hbasim , Hinedge_erode , Hinedge_frac ) ;
+     mri_interior_edgeize( Hsrcim , Hinedge_erode , Hinedge_frac ) ;
+   }
+#endif
 
    if( Hpblur_b > 0.0f && Hblur_b == 0.0f ) Hblur_b = 0.1f ;
    if( Hpblur_s > 0.0f && Hblur_s == 0.0f ) Hblur_s = 0.1f ;
@@ -12669,6 +12815,7 @@ IndexWarp3D * IW3D_warpomatic_plusminus( MRI_IMAGE *bim, MRI_IMAGE *wbim, MRI_IM
    int dkkk,djjj,diii , ngmin=0 , levdone=0 , do_qfinal=0 ;
    int qmode=MRI_CUBIC , nlevr , nsup,isup , myIwarp=0 ;
    int qmode2=MRI_CUBIC , qmodeX ;
+   char warplab[64] ;
 
 ENTRY("IW3D_warpomatic_plusminus") ;
 
@@ -12709,9 +12856,9 @@ ENTRY("IW3D_warpomatic_plusminus") ;
 #ifdef USE_PLUSMINUS_INITIALWARP
      nlevr = ( WORKHARD(0) || Hduplo ) ? 4 : 2 ; if( SUPERHARD(0) ) nlevr++ ;
 #else
-     nlevr = 4 ;
+     nlevr = 3 ;
 #endif
-     Hforce = 1 ; Hfactor = 1.0f ; Hpen_use = 0 ; Hlev_now = 0 ;
+     Hforce = 1 ; Hfactor = Hfactor_q ; Hpen_use = 0 ; Hlev_now = 0 ;
      PBLUR_BASE  (ibbb,ittt,jbbb,jttt,kbbb,kttt) ;  /* progressive blur, if ordered */
      PBLUR_SOURCE(ibbb,ittt,jbbb,jttt,kbbb,kttt) ;
      mri_free(Haasrcim_plus) ;   /* at this point, create the initial */
@@ -12724,14 +12871,22 @@ ENTRY("IW3D_warpomatic_plusminus") ;
        Haabasim_minus = IW3D_warp_floatim( Haawarp, BASIM, Himeth , -1.0f ) ;
      }
      if( Hverb == 1 ) fprintf(stderr,"lev=0 %d..%d %d..%d %d..%d: ",ibbb,ittt,jbbb,jttt,kbbb,kttt) ;
+     BOXOPT ;
      (void)IW3D_improve_warp_plusminus( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
+     if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
+#if 0
      (void)IW3D_improve_warp_plusminus( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
+     if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
+#endif
+     BALLOPT ;
      (void)IW3D_improve_warp_plusminus( MRI_CUBIC  , ibbb,ittt,jbbb,jttt,kbbb,kttt );
      if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
           if( Hznoq  ) nlevr = 0 ;
      else if( Hzeasy ) nlevr = 1 ;
      for( iii=0 ; iii < nlevr ; iii++ ){
        Hcostold = Hcost ;
+       if( iii%2 == 0 ) BOXOPT ;
+       else             BALLOPT ;
        (void)IW3D_improve_warp_plusminus( MRI_QUINTIC, ibbb,ittt,jbbb,jttt,kbbb,kttt );
        if( Hquitting ) goto DoneDoneDone ;  /* signal to quit was sent */
        if( iii > 0 && iii < nlevr-1 && Hcostold-Hcost < 0.00444f ){
@@ -12741,6 +12896,10 @@ ENTRY("IW3D_warpomatic_plusminus") ;
        }
      }
      if( Hverb == 1 ) fprintf(stderr," done [cost=%.5f]\n",Hcost) ;
+     if( Hsave_allwarps ){
+       sprintf(warplab,"Lev0.%04dx%04dx%04d",ittt-ibbb+1,jttt-jbbb+1,kttt-kbbb+1) ;
+       HSAVE_ADDTO(Haawarp,warplab) ;
+     }
    } else {
      Hcost = 666.666f ;  /* a beastly thing to do */
    }
@@ -12767,6 +12926,8 @@ ENTRY("IW3D_warpomatic_plusminus") ;
 
      flev = (Hpen_old) ? 1.0f : powf( (float)(lev-levs+1) , 0.333f ) ; ;
      Hpen_fff = Hpen_fac * MIN(2.22f,flev) ;  /* 20 Sep 2013 */
+
+     Hpen_use = (Hpen_fff > 0.0f) && (lev > 2) ;
 
      /* compute width of rectangles at this level */
 
@@ -12832,7 +12993,7 @@ ENTRY("IW3D_warpomatic_plusminus") ;
 #define BBB 0.888f
      Hfactor = (1.0f-HHH) + HHH*powf(BBB,(float)(lev-1)) ;  /* max displacement allowed */
 #else
-     Hfactor = 1.0f ;
+     Hfactor = Hfactor_q ;
 #endif
 
      qmode = qmode2 = MRI_CUBIC ;  /* cubic patches from here on down */
@@ -12869,6 +13030,8 @@ ENTRY("IW3D_warpomatic_plusminus") ;
      /* alternate the direction of sweeping at different levels */
 
      if( lev%2 == 1 || nlevr > 1 ){  /* bot to top, ijk */
+           if( do_qfinal ) BALLOPT ;
+      else if( nlevr > 1 ) BOXOPT ;
       for( isup=0 ; isup < nsup ; isup++ ){  /* superhard? */
        for( kdon=0,kbot=kbbb ; !kdon ; kbot += dkkk ){
          ktop = kbot+zwid-1;
@@ -12909,6 +13072,7 @@ ENTRY("IW3D_warpomatic_plusminus") ;
 
      if( lev%2 == 0 || nlevr > 1 ){ /* top to bot, kji */
        if( nlevr > 1 && Hverb == 1 ) fprintf(stderr,":[cost=%.5f]:",Hcost) ;
+       if( do_qfinal || nlevr > 1 ) BALLOPT ;
        qmodeX = (nlevr > 1) ? qmode2 : qmode ;
       for( isup=0 ; isup < nsup ; isup++ ){  /* superhard? */
        for( idon=0,itop=ittt ; !idon ; itop -= diii ){
@@ -12949,6 +13113,11 @@ ENTRY("IW3D_warpomatic_plusminus") ;
      }
 
      if( Hverb == 1 ) fprintf(stderr," done [cost=%.5f]\n",Hcost) ;
+
+     if( Hsave_allwarps ){
+       sprintf(warplab,"Lev%d.%04dx%04dx%04d",lev,xwid,ywid,zwid) ;
+       HSAVE_ADDTO(Haawarp,warplab) ;
+     }
 
    } /*-- end of loop over levels of refinement --*/
 
@@ -12997,6 +13166,35 @@ ENTRY("IW3D_warp_s2bim_plusminus") ;
 
    RETURN(sbww) ;
 }
+
+#if 0
+/*----------------------------------------------------------------------------*/
+/* Function to compute 'normal' 3dQwarp result from the plusminus warps.
+   From the 3dQwarp help:
+      Define Wp(x) = x+dis(x) and Wm(x) = x-dis(x). Then since
+      base(Wm(x)) matches source(Wp(x)), by substituting INV(Wm(x))
+      wherever we see x, we have base(x) matches source(Wp(INV(Wm(x))));
+      that is, the warp V(x) that one would get from the 'usual' way
+      of running 3dQwarp is V(x) = Wp(INV(Wm(x))).
+   The code to do this is in 3dQWarp.c ('-pmBASE' option) and so this
+   function is not actually used anywhere.
+*//*--------------------------------------------------------------------------*/
+
+IndexWarp3D * IW3D_plusminus_to_direct( IndexWarp3D *pww )
+{
+   IndexWarp3D *mww , *imww ;
+
+   if( pww == NULL ) return NULL ;
+
+    mww = IW3D_copy( pww , -1.0f ) ;
+   imww = IW3D_invert (  mww , NULL , MRI_WSINC5 ) ;
+    mww = IW3D_compose( imww , pww  , MRI_WSINC5 ) ;
+
+   IW3D_destroy(imww) ;
+   return mww ;
+}
+#endif
+
 #endif /* ALLOW_PLUSMINUS */
 /*****--------------------------------------------------------------------*****/
 /*****||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*****/

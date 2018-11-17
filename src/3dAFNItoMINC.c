@@ -6,6 +6,10 @@ int main( int argc , char *argv[] )
    char *prefix=NULL , *fname ;
    int narg=1 , flags=0 , ii , swap = 0;
 
+#ifndef DONT_ALLOW_MINC
+
+WARNING_message("This program (3dAFNItoMINC) is old, not maintained, and probably useless!") ;
+
    if( argc < 2 || strcmp(argv[1],"-help") == 0 ){
       printf("Usage: 3dAFNItoMINC [options] dataset\n"
              "Reads in an AFNI dataset, and writes it out as a MINC file.\n"
@@ -81,4 +85,10 @@ int main( int argc , char *argv[] )
 
    ii = THD_write_minc( fname , dset , flags ) ;
    exit(0) ;
+
+#else
+
+   ERROR_exit("program 3dAFNItoMINC is no longer compiled") ;
+
+#endif
 }

@@ -67,6 +67,7 @@ voxels per original voxel
 #include "mrilib.h"
 
 static int do_NN = 0 ;  /* 12 Jul 2017 */
+static int NNvox = 0 ;  /* 08 Sep 2017 */
 
 static EDIT_options CL_edopt ;
 static int CL_ivfim=-1 , CL_ivthr=-1 ;
@@ -158,7 +159,7 @@ int main( int argc , char * argv[] )
   "----------------------------------------------------------------------- \n"
   "Usage:\n"
   "                                                                        \n"
-  "   3dclust [editing options] [other options] rmm vmul dset ...      \n"
+  "   3dclust [editing options] [other options] rmm vmul dset ...          \n"
   "                                                                        \n"
   " *OR*\n"
   "                                                                        \n"
@@ -167,10 +168,12 @@ int main( int argc , char * argv[] )
   "      -NN1 == 1st nearest-neighbor (faces touching) clustering\n"
   "      -NN2 == 2nd nearest-neighbor (edges touching) clustering\n"
   "      -NN2 == 3rd nearest-neighbor (corners touching) clustering\n"
-  "-----                                                                   \n"
-  "                                                                        \n"
+  "     Optionally, you can put an integer after the '-NNx' option, to\n"
+  "     indicate the minimum number of voxels to allow in a cluster;\n"
+  "     for example: -NN2 60\n"
+  "----------------------------------------------------------------------- \n"
   "Examples:                                                               \n"
-  "--------                                                                \n"
+  "---------                                                               \n"
   "                                                                        \n"
   "    3dclust         -1clip   0.3  5 2000 func+orig'[1]'                 \n"
   "    3dclust -1noneg -1thresh 0.3  5 2000 func+orig'[1]'                 \n"
@@ -215,6 +218,8 @@ int main( int argc , char * argv[] )
   "  If you use one of these '-NNx' options, you do NOT give the rmm\n"
   "  and vmul values.  Instead, after all the options that start with '-',\n"
   "  you just give the input dataset name(s).\n"
+  "  If you want to set a minimum cluster size using '-NNx', put the minimum\n"
+  "  voxel count immediately after, as in '-NN3 100'.\n"
   "\n"
   "FOLLOWED BY ONE (or more) DATASETS\n"
   "                                                                        \n"
@@ -231,35 +236,35 @@ int main( int argc , char * argv[] )
   "Options:                                                                \n"
   "-------                                                                 \n"
   "                                                                        \n"
-  "* Editing options are as in 3dmerge (see 3dmerge -help)                 \n"
+  "  Editing options are as in 3dmerge (see 3dmerge -help)                 \n"
   "  (including -1thresh, -1dindex, -1tindex, -dxyz=1 options)             \n"
   "\n"
-  "* -NN1        => described earlier;\n"
+  "  -NN1        => described earlier;\n"
   "  -NN2        => replaces the use of 'rmm' to specify the\n"
   "  -NN3        => clustering method (vmul is set to 2 voxels)\n"
   "                                                                        \n"
-  "* -noabs      => Use the signed voxel intensities (not the absolute     \n"
+  "  -noabs      => Use the signed voxel intensities (not the absolute     \n"
   "                 value) for calculation of the mean and Standard        \n"
   "                 Error of the Mean (SEM)                                \n"
   "                                                                        \n"
-  "* -summarize  => Write out only the total nonzero voxel                 \n"
+  "  -summarize  => Write out only the total nonzero voxel                 \n"
   "                 count and volume for each dataset                      \n"
   "                                                                        \n"
-  "* -nosum      => Suppress printout of the totals                        \n"
+  "  -nosum      => Suppress printout of the totals                        \n"
   "                                                                        \n"
-  "* -verb       => Print out a progress report (to stderr)                \n"
+  "  -verb       => Print out a progress report (to stderr)                \n"
   "                 as the computations proceed                            \n"
   "                                                                        \n"
-  "* -1Dformat   => Write output in 1D format (now default). You can       \n"
+  "  -1Dformat   => Write output in 1D format (now default). You can       \n"
   "                 redirect the output to a .1D file and use the file     \n"
   "                 as input to whereami for obtaining Atlas-based         \n"
   "                 information on cluster locations.                      \n"
   "                 See whereami -help for more info.                      \n"
-  "* -no_1Dformat=> Do not write output in 1D format.                      \n"
+  " -no_1Dformat => Do not write output in 1D format.                      \n"
   "                                                                        \n"
-  "* -quiet      => Suppress all non-essential output                      \n"
+  "  -quiet      => Suppress all non-essential output                      \n"
   "                                                                        \n"
-  "* -mni        => If the input dataset has the +tlrc view, this option   \n"
+  "  -mni        => If the input dataset has the +tlrc view, this option   \n"
   "                 will transform the output xyz-coordinates from TLRC to \n"
   "                 MNI space.\n"
   "                                                                        \n"
@@ -275,13 +280,13 @@ int main( int argc , char * argv[] )
   "                  to the 'LPI' (neuroscience) orientation, as if you    \n"
   "                  gave the '-orient LPI' option.)                       \n"
   "                                                                        \n"
-  "* -isovalue   => Clusters will be formed only from contiguous (in the   \n"
+  "  -isovalue   => Clusters will be formed only from contiguous (in the   \n"
   "                 rmm sense) voxels that also have the same value.       \n"
   "                                                                        \n"
   "           N.B.:  The normal method is to cluster all contiguous        \n"
   "                  nonzero voxels together.                              \n"
   "                                                                        \n"
-  "* -isomerge   => Clusters will be formed from each distinct value       \n"
+  "  -isomerge   => Clusters will be formed from each distinct value       \n"
   "                 in the dataset; spatial contiguity will not be         \n"
   "                 used (but you still have to supply rmm and vmul        \n"
   "                 on the command line).                                  \n"
@@ -289,7 +294,7 @@ int main( int argc , char * argv[] )
   "           N.B.:  'Clusters' formed this way may well have components   \n"
   "                   that are widely separated!                           \n"
   "\n"
-  "* -inmask  =>    If 3dClustSim put an internal attribute into the       \n"
+  "  -inmask  =>    If 3dClustSim put an internal attribute into the       \n"
   "                 input dataset that describes a mask, 3dclust will      \n"
   "                 use this mask to eliminate voxels before clustering,   \n"
   "                 if you give this option.  '-inmask' is how the AFNI    \n"
@@ -300,14 +305,14 @@ int main( int argc , char * argv[] )
   "           N.B.: The usual way for 3dClustSim to have put this internal \n"
   "                 mask into a functional dataset is via afni_proc.py.    \n"
   "                                                                        \n"
-  "* -prefix ppp => Write a new dataset that is a copy of the              \n"
+  "  -prefix ppp => Write a new dataset that is a copy of the              \n"
   "                 input, but with all voxels not in a cluster            \n"
   "                 set to zero; the new dataset's prefix is 'ppp'         \n"
   "                                                                        \n"
   "           N.B.:  Use of the -prefix option only affects the            \n"
   "                  first input dataset.                                  \n"
   "\n"
-  "* -savemask q => Write a new dataset that is an ordered mask, such      \n"
+  "  -savemask q => Write a new dataset that is an ordered mask, such      \n"
   "                 that the largest cluster is labeled '1', the next      \n"
   "                 largest '2' and so forth.  Should be the same as       \n"
   "                 '3dmerge -1clust_order' or Clusterize 'SaveMsk'.       \n"
@@ -324,8 +329,8 @@ int main( int argc , char * argv[] )
   "                                                                        \n"
   "  The above command tells 3dclust to find potential cluster volumes for \n"
   "  dataset func+orig, sub-brick #1, where the threshold has been set     \n"
-  "  to 0.3 (i.e., ignore voxels with an activation threshold of >0.3 or   \n"
-  "  <-0.3.  Voxels must be no more than 5 mm apart, and the cluster volume\n"
+  "  to 0.3 (i.e., ignore voxels with activation threshold >0.3 or <-0.3). \n"
+  "  Voxels must be no more than 5 mm apart, and the cluster volume        \n"
   "  must be at least 3000 micro-liters in size.                           \n"
   "                                                                        \n"
   "Explanation of 3dclust Output:                                          \n"
@@ -438,7 +443,8 @@ int main( int argc , char * argv[] )
        case 2: rmm = 1.44f ; break ;
        case 3: rmm = 1.77f ; break ;
      }
-     vmul = 2.0f ;
+     if( NNvox > 0 ) vmul = (float)NNvox ;
+     else            vmul = 2.0f ;
    } else {        /* the OLDE way (with rmm and vmul) */
      if( nopt+3 > argc )
         ERROR_exit("No rmm or vmul arguments?") ;
@@ -479,7 +485,7 @@ int main( int argc , char * argv[] )
          continue ;
       }
 
-      THD_force_malloc_type( dset->dblk , DATABLOCK_MEM_MALLOC ) ;    /* mmap */
+      THD_force_malloc_type( dset->dblk , DATABLOCK_MEM_MALLOC ) ;  /* no mmap */
       if( CL_verbose )
          INFO_message("Loading dataset %s",argv[iarg]) ;
       DSET_load(dset); CHECK_LOAD_ERROR(dset);                     /* read in */
@@ -674,6 +680,7 @@ int main( int argc , char * argv[] )
       clar = clbig ;
       if( clar == NULL || clar->num_clu == 0 ){
          printf("%s** NO CLUSTERS FOUND ***\n", c1d) ;
+         if( AFNI_yesenv("AFNI_3dclust_report_zero") ) printf(" 0\n") ;
          if( clar != NULL ) DESTROY_CLARR(clar) ;
          continue ;
       }
@@ -907,8 +914,10 @@ int main( int argc , char * argv[] )
       }
 
       DESTROY_CLARR(clar) ;
-      if( ndet == 0 )
+      if( ndet == 0 ){
          printf("%s** NO CLUSTERS FOUND ABOVE THRESHOLD VOLUME ***\n", c1d) ;
+         if( AFNI_yesenv("AFNI_3dclust_report_zero") ) printf(" 0\n") ;
+      }
 
 
       /* MSB 11/1/96  Calculate global SEM */
@@ -997,13 +1006,28 @@ void CL_read_opts( int argc , char * argv[] )
 #endif
 
       if( strcmp(argv[nopt],"-NN1") == 0 ){   /* 12 Jul 2017 */
-        do_NN = 1 ; nopt++ ; continue ;
+        do_NN = 1 ; nopt++ ;
+        if( nopt < argc && isdigit(argv[nopt][0]) )
+          NNvox = (int)strtod(argv[nopt++],NULL) ;
+        else
+          NNvox = 0 ;
+        continue ;
       }
       if( strcmp(argv[nopt],"-NN2") == 0 ){
-        do_NN = 2 ; nopt++ ; continue ;
+        do_NN = 2 ; nopt++ ;
+        if( nopt < argc && isdigit(argv[nopt][0]) )
+          NNvox = (int)strtod(argv[nopt++],NULL) ;
+        else
+          NNvox = 0 ;
+        continue ;
       }
       if( strcmp(argv[nopt],"-NN3") == 0 ){
-        do_NN = 3 ; nopt++ ; continue ;
+        do_NN = 3 ; nopt++ ;
+        if( nopt < argc && isdigit(argv[nopt][0]) )
+          NNvox = (int)strtod(argv[nopt++],NULL) ;
+        else
+          NNvox = 0 ;
+        continue ;
       }
       if( strcmp(argv[nopt],"-NN") == 0 ){
         nopt++ ;
@@ -1011,7 +1035,12 @@ void CL_read_opts( int argc , char * argv[] )
         do_NN = (int)strtod(argv[nopt],NULL) ;
         if( do_NN < 1 || do_NN > 3 )
           ERROR_exit("Illegal value '%s' after '-NN'",argv[nopt]) ;
-        nopt++ ; continue ;
+        nopt++ ;
+        if( nopt < argc && isdigit(argv[nopt][0]) )
+          NNvox = (int)strtod(argv[nopt++],NULL) ;
+        else
+          NNvox = 0 ;
+        continue ;
       }
 
       if( strcmp(argv[nopt],"-no_inmask") == 0 ){  /* 02 Aug 2011 */

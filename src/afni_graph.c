@@ -43,6 +43,8 @@ extern MRI_IMAGE * FD_brick_to_series( int , FD_brick * br ) ;
 
 static int fade_color = 19 ;
 
+static char *startup_1D_transform = NULL ;
+
 /*------------------------------------------------------------*/
 /*! Macro to call the getser function with correct prototype. */
 
@@ -180,6 +182,8 @@ ENTRY("new_MCW_grapher") ;
                     XmNinitialResourcesPersistent , False ,
               NULL ) ;
 
+    grapher->top_form = form_tmp ; /* save this [24 May 2018] */
+
    /** make a drawing area to get everything **/
 
    grapher->draw_fd =
@@ -245,6 +249,10 @@ ENTRY("new_MCW_grapher") ;
                        "F      = turn threshold 'Fading' on/off\n"
                        "v/V    = Video up/down in time\n"
                        "r/R    = Video ricochet up/down in time\n"
+                       "p      = play sound from central graph\n"
+                       "P      = play sound from average graph\n"
+                       "         and central graph (polyphony)\n"
+                       "K      = kill any running sound player\n"
                        "F5     = Meltdown!\n"
                        "\n"
                        "See the 'Opt' menu for other keypress actions\n"
@@ -2158,6 +2166,10 @@ ENTRY("plot_graphs") ;
 
      static int first=1 ;
 
+#if 0
+ININFO_message("  initialize graph for DPLOT") ;
+#endif
+
      if( DATA_BOXED(grapher) ){
        MCW_set_bbox( grapher->opt_dplot_bbox , DPLOT_OFF ) ;
        if( first ){
@@ -2244,7 +2256,14 @@ STATUS("about to perform 0D transformation") ;
          if( grapher->transform1D_func != NULL ){
             MRI_IMAGE *qim ;                /* image to be transformed */
 
+#if 0
+ININFO_message("  execute transform1D_func") ;
+#endif
+
             if( dplot ){                      /* copy and save original */
+#if 0
+ININFO_message("   - copy original data") ;
+#endif
               qim = mri_to_float(tsim) ;       /* if double plot is on */
               ADDTO_IMARR(dplot_imar,qim) ;
             }
@@ -2263,6 +2282,9 @@ STATUS("about to perform 1D transformation") ;
                              id.ijk[0]
                             +id.ijk[1] * br->nxyz.ijk[0]
                             +id.ijk[2] * br->nxyz.ijk[0] * br->nxyz.ijk[1] , 0 ) ;
+#if 0
+ININFO_message("   - store dset index") ;
+#endif
 #else
                AFNI_store_dset_index(-1,0) ;
 #endif
@@ -2275,6 +2297,9 @@ STATUS("about to perform 1D transformation") ;
                  grapher->transform1D_func( qim->nx , qim->xo , qim->dx ,
                                             MRI_FLOAT_PTR(qim) ) ;
 #else
+#if 0
+ININFO_message("   - old call 1D_function - no str") ;
+#endif
                  AFNI_CALL_1D_function( grapher->transform1D_func ,
                                         qim->nx , qim->xo , qim->dx ,
                                         MRI_FLOAT_PTR(qim) ) ;
@@ -2285,6 +2310,9 @@ STATUS("about to perform 1D transformation") ;
                  grapher->transform1D_func( qim->nx , qim->xo , qim->dx ,
                                             MRI_FLOAT_PTR(qim) , &quser ) ;
 #else
+#if 0
+ININFO_message("   - old call 1D_function - yes str") ;
+#endif
                  AFNI_CALL_1D_funcstr( grapher->transform1D_func ,
                                        qim->nx , qim->xo , qim->dx ,
                                        MRI_FLOAT_PTR(qim) , quser ) ;
@@ -2298,6 +2326,9 @@ STATUS("about to perform 1D transformation") ;
 #if 0
                  grapher->transform1D_func( qim ) ;
 #else
+#if 0
+ININFO_message("   - new call 1D_function - no str") ;
+#endif
                  AFNI_CALL_1D_funcmrim( grapher->transform1D_func , qim ) ;
 #endif
               } else {
@@ -2305,6 +2336,9 @@ STATUS("about to perform 1D transformation") ;
 #if 0
                  grapher->transform1D_func( qim , &quser ) ;
 #else
+#if 0
+ININFO_message("   - new call 1D_function - yes str") ;
+#endif
                  AFNI_CALL_1D_funcmrimstr( grapher->transform1D_func , qim,quser ) ;
 #endif
                  if( quser != NULL )
@@ -2316,6 +2350,9 @@ STATUS("about to perform 1D transformation") ;
 
             if( dplot && mri_equal(tsim,qim) ){
               mri_free(qim) ;
+#if 0
+ININFO_message("   - discard duplicate transformed data") ;
+#endif
               IMARR_SUBIM( dplot_imar , IMARR_COUNT(dplot_imar)-1 ) = NULL ;
             }
 
@@ -3693,6 +3730,7 @@ STATUS("allocating new Pixmap") ;
 void GRA_handle_keypress( MCW_grapher *grapher , char *buf , XEvent *ev )
 {
    int ii=0 ;
+   static int first_sound=1 ;
 
 ENTRY("GRA_handle_keypress") ;
 
@@ -3707,7 +3745,7 @@ STATUS(str); }
 
    /* first 'N' */
 
-   if( grapher->key_Nlock==0 && buf[0]=='N' ){
+   if( AFNI_yesenv("AFNI_GRAPH_ALLOW_SHIFTN") && grapher->key_Nlock==0 && buf[0]=='N' ){
      grapher->key_Nlock = 1 ;
      HAND_cursorize( grapher->fdw_graph ) ;
      HAND_cursorize( grapher->draw_fd ) ;
@@ -3857,6 +3895,59 @@ STATUS(str); }
                            "  * end in .jpg or .png *\n"
                            "  * for those formats   *" , NULL ,
                            GRA_saver_CB , (XtPointer) grapher ) ;
+      break ;
+
+#define POPUP_SOUND_ERROR_MESSAGE                                               \
+ do{ if( first_sound ){                                                         \
+       char msg[2048] ;                                                         \
+       strcpy(msg," \n" "Cannot play sound:\n" ) ;                              \
+       if( !GLOBAL_library.local_display )                                      \
+         strcat( msg+strlen(msg) , " You are running AFNI remotely :(\n" ) ;    \
+       if( GLOBAL_library.sound_player==NULL )                                  \
+         strcat( msg+strlen(msg) , " No sound playing program is found :(\n") ; \
+       strcat( msg+strlen(msg) , " \n") ;                                       \
+       (void) MCW_popup_message(                                                \
+                 grapher->fdw_graph , msg , MCW_USER_KILL | MCW_TIMER_KILL ) ;  \
+ } } while(0)
+
+#define PRINT_SOUND_INFO_MESSAGE                                                           \
+ do{ if( first_sound ){                                                                     \
+         INFO_message("Use K keypress to kill playing sounds:") ;                            \
+       ININFO_message(" might leave sound file named AFNI_SOUND_TEMP.something.au on disk;"); \
+       ININFO_message(" if so, you will have to delete such files manually :(") ;             \
+ } } while(0)
+
+      case 'p':                             /* play sound [20 Aug 2018] */
+        if( !GLOBAL_library.local_display || GLOBAL_library.sound_player==NULL ){
+          POPUP_SOUND_ERROR_MESSAGE ;
+        } else if( grapher->cen_tsim != NULL ){
+          int ib = grapher->init_ignore ;
+          PRINT_SOUND_INFO_MESSAGE ;
+          mri_play_sound( grapher->cen_tsim , ib ) ;
+        }
+        first_sound = 0 ;
+      break ;
+
+      case 'P':                             /* play sound [20 Aug 2018] */
+        if( !GLOBAL_library.local_display || GLOBAL_library.sound_player==NULL ){
+          POPUP_SOUND_ERROR_MESSAGE ;
+        } else if( grapher->ave_tsim != NULL && grapher->cen_tsim != NULL ){
+          int ib = grapher->init_ignore ;
+          MRI_IMARR *imar ; MRI_IMAGE *qim ;
+          INIT_IMARR(imar) ;
+          ADDTO_IMARR(imar,grapher->ave_tsim) ; /* glue the 2 */
+          ADDTO_IMARR(imar,grapher->cen_tsim) ; /* timeseries */
+          qim = mri_catvol_1D( imar , 2 ) ;     /* together   */
+          PRINT_SOUND_INFO_MESSAGE ;
+          mri_play_sound( qim , ib ) ;
+          mri_free(qim) ; FREE_IMARR(imar) ;
+        }
+        first_sound = 0 ;
+      break ;
+
+      case 'K':                     /* kill sound players [27 Aug 2018] */
+        if( !first_sound )
+          kill_sound_players() ;
       break ;
 
       case 'L':
@@ -5178,6 +5269,9 @@ STATUS("replacing ort timeseries") ;
             GRA_fix_optmenus( grapher ) ;
 #endif
             NI_sleep(1) ;  /* 08 Mar 2002: for good luck */
+
+           if( startup_1D_transform != NULL )  /* 19 Dec 2018 */
+             GRA_set_1D_transform( grapher , startup_1D_transform ) ;
          }
          RETURN( True ) ;
       }
@@ -6772,3 +6866,61 @@ void GRA_timer_stop( MCW_grapher *grapher )
      XtRemoveTimeOut(grapher->timer_id); grapher->timer_id = 0;
    }
 }
+
+/*--------------------------------------------------------------------------*/
+/* externally set 1D transformation [19 Dec 2018] */
+
+int GRA_find_1D_transform( MCW_grapher *grapher , char *nam )
+{
+   int ii ;
+
+   if( grapher == NULL || grapher->status->transforms1D == NULL ) return -1 ;
+   if( nam == NULL || *nam == '\0' ) return -1 ;
+
+   for( ii=0 ; ii < grapher->status->transforms1D->num ; ii++ ){
+     if( strcmp( grapher->status->transforms1D->labels[ii] , nam ) == 0 )
+       return ii ;
+   }
+
+   return -1 ;
+}
+
+void GRA_startup_1D_transform( char *nam )
+{
+   if( startup_1D_transform != NULL ){
+     free(startup_1D_transform) ;
+     startup_1D_transform = NULL ;
+   }
+   if( nam != NULL && *nam != '\0' )
+     startup_1D_transform = strdup(nam) ;
+   return ;
+}
+
+void GRA_set_1D_transform( MCW_grapher *grapher , char *nam )
+{
+   int tt ;
+
+   if( grapher == NULL ) return ;
+   tt = GRA_find_1D_transform( grapher , nam ) ; if( tt < 0 ) return ;
+
+#if 0
+ININFO_message("  found transform1D index to %d",tt) ;
+#endif
+   AV_assign_ival( grapher->transform1D_av , tt+1 ) ;
+
+   grapher->transform1D_func  = grapher->status->transforms1D->funcs[tt];
+   grapher->transform1D_index = tt+1 ;
+   grapher->transform1D_flags = grapher->status->transforms1D->flags[tt];
+
+   if( (grapher->transform1D_flags & SET_DPLOT_OVERLAY) && !DATA_BOXED(grapher) ){
+#if 0
+ININFO_message("   - set DPLOT_OVERLAY") ;
+#endif
+     MCW_set_bbox( grapher->opt_dplot_bbox , DPLOT_OVERLAY ) ;
+   }
+
+   /** redraw_graph( grapher , 0 ) ; **/
+   return ;
+}
+
+/*--------------------------------------------------------------------------*/

@@ -55,6 +55,9 @@ static int AFNI_drive_write_underlay( char *cmd ) ; /* 16 Jun 2014 */
 static int AFNI_drive_write_overlay( char *cmd ) ;  /* 16 Jun 2014 */
 static int AFNI_drive_write_cont_spxhelp(char *cmd);/* 08 Apr 2015 */
 static int AFNI_drive_snap_cont( char *cmd );       /* 08 Apr 2015 */
+static int AFNI_drive_snap_viewer( char *cmd );     /* 23 May 2018 */
+static int AFNI_drive_underlay_range( char *cmd );  /* 23 Jul 2018 */
+static int AFNI_drive_nothing( char *cmd );         /* 23 Jul 2018 */
 
 static FILE * AFNI_drive_get_outstream(void);       /* 02 Jun 2015 */
 static int AFNI_drive_set_outstream(char *outfile); /* 02 Jun 2015 */
@@ -87,6 +90,7 @@ static int AFNI_drive_set_pbar_number  ( char *cmd ) ; /* 16 Jan 2003 */
 static int AFNI_drive_set_pbar_sign    ( char *cmd ) ; /* 17 Jan 2003 */
 static int AFNI_drive_set_pbar_all     ( char *cmd ) ; /* 17 Jan 2003 */
 static int AFNI_drive_pbar_rotate      ( char *cmd ) ; /* 17 Jan 2003 */
+static int AFNI_drive_pbar_saveim      ( char *cmd ) ; /* 19 Oct 2018 */
 static int AFNI_set_func_autorange     ( char *cmd ) ; /* 17 Jan 2003 */
 static int AFNI_set_func_range         ( char *cmd ) ; /* 21 Jan 2003 */
 static int AFNI_set_func_visible       ( char *cmd ) ; /* 21 Jan 2003 */
@@ -102,6 +106,7 @@ static int AFNI_drive_quiet_plugouts   ( char *cmd ) ; /* 15 Oct 2008 */
 static int AFNI_drive_noisy_plugouts   ( char *cmd ) ; /* 15 Oct 2008 */
 static int AFNI_set_func_percentile    ( char *cmd ) ; /* 27 Apr 2012 */
 static int AFNI_set_func_alpha         ( char *cmd ) ; /* 10 Dec 2014 */
+static int AFNI_set_func_boxed         ( char *cmd ) ; /* 05 Nov 2018 */
 
 static int AFNI_trace                  ( char *cmd ) ; /* 04 Oct 2005 */
 
@@ -111,7 +116,7 @@ static int AFNI_trace                  ( char *cmd ) ; /* 04 Oct 2005 */
   compared means that you can't have 2 distinct commands like
   "XXX" and "XXXYYY", since when the "XXXYYY" command was given,
   it might instead be matched to "XXX", and then the wrong function
-  would be called, resulting in Galactic anarchy.
+  would be called, resulting in Galactic anarchy (at best).
 -------------------------------------------------------------------*/
 
 typedef int dfunc(char *) ;  /* action functions */
@@ -179,6 +184,7 @@ static AFNI_driver_pair dpair[] = {
  { "SET_GRAPH_GEOM"   , AFNI_drive_geom_graph        } ,
 
  { "QUITT"            , AFNI_drive_quitt             } ,
+ { "QQUIT"            , AFNI_drive_quitt             } ,
  { "QUIT"             , AFNI_drive_quit              } ,
 
  { "SYSTEM"           , AFNI_drive_system            } ,
@@ -192,10 +198,12 @@ static AFNI_driver_pair dpair[] = {
  { "SET_PBAR_SIGN"      , AFNI_drive_set_pbar_sign     } ,
  { "SET_PBAR_ALL"       , AFNI_drive_set_pbar_all      } ,
  { "PBAR_ROTATE"        , AFNI_drive_pbar_rotate       } ,
+ { "PBAR_SAVEIM"        , AFNI_drive_pbar_saveim       } ,
  { "SET_FUNC_AUTORANGE" , AFNI_set_func_autorange      } ,
  { "SET_FUNC_RANGE"     , AFNI_set_func_range          } ,
  { "SET_FUNC_VISIBLE"   , AFNI_set_func_visible        } ,
  { "SET_FUNC_ALPHA"     , AFNI_set_func_alpha          } ,
+ { "SET_FUNC_BOXED"     , AFNI_set_func_boxed          } ,
  { "SEE_OVERLAY"        , AFNI_set_func_visible        } ,
  { "SET_FUNC_RESAM"     , AFNI_set_func_resam          } ,
  { "SLEEP"              , AFNI_sleeper                 } ,
@@ -226,7 +234,10 @@ static AFNI_driver_pair dpair[] = {
  { "WRITE_UNDERLAY"     , AFNI_drive_write_underlay    } ,
  { "WRITE_CONT_SPX_HELP", AFNI_drive_write_cont_spxhelp} ,
  { "SNAP_CONT"          , AFNI_drive_snap_cont         } ,
+ { "SNAP_VIEWER"        , AFNI_drive_snap_viewer       } ,
 
+ { "SET_ULAY_RANGE"     , AFNI_drive_underlay_range    } , /* 23 Jul 2018 */
+ { "DO_NOTHING"         , AFNI_drive_nothing           } ,
 
  { NULL , NULL }  /* flag that we've reached the end times */
 } ;
@@ -337,6 +348,13 @@ ENTRY("AFNI_driver") ;
          "       apsearch -view_readme driv \n",cmd) ;  /* 22 Feb 2007 */
 
    free(dmd) ; RETURN(-1) ;  /* not in the lists */
+}
+
+/*---------------------------------------------------------------*/
+
+int AFNI_drive_nothing( char *cmd ) /* not the hardest code to write */
+{
+  RETURN(0) ;
 }
 
 /*---------------------------------------------------------------*/
@@ -868,13 +886,17 @@ ENTRY("AFNI_drive_open_window") ;
    /*--- opened an image viewer: maybe modify it ---*/
 
    if( isq != NULL ){
+      int ms = 0 ;
 
       /* geometry */
 
-      if( gxx >= 0 && gyy >= 0 )
-        XtVaSetValues( isq->wtop, XmNx, gxx, XmNy, gyy, NULL ) ;
-      if( gww > 0 && ghh > 0 )
-        XtVaSetValues( isq->wtop, XmNwidth, gww, XmNheight, ghh, NULL ) ;
+      if( gxx >= 0 && gyy >= 0 ){
+        XtVaSetValues( isq->wtop, XmNx, gxx, XmNy, gyy, NULL ) ; ms += 400 ;
+      }
+      if( gww > 0 && ghh > 0 ){
+        XtVaSetValues( isq->wtop, XmNwidth, gww, XmNheight, ghh, NULL ) ; ms += 400 ;
+      }
+      if( ms > 0 ){ NI_sleep(ms) ; ms = 0 ; }
 
       /* image fraction */
 
@@ -884,6 +906,7 @@ ENTRY("AFNI_drive_open_window") ;
         float ifrac = strtod( cpt+6 , NULL ) ;
         if( ifrac >= FRAC_MIN && ifrac <= 1.0 )
           drive_MCW_imseq( isq, isqDR_setifrac, (XtPointer)(&ifrac) ) ;
+        ms += 100 ;
       }
 
       /* montage */
@@ -899,9 +922,10 @@ ENTRY("AFNI_drive_open_window") ;
         if( nn >= 2 && mww >= 1 && mww <= MONT_NMAX && mhh >= 1 && mhh <= MONT_NMAX ){
           int mp[5] ;
           mp[0] = mww ; mp[1] = mhh ; mp[2] = msp ; mp[3] = mgap ;
-          mp[4] = DC_find_overlay_color(im3d->dc,mcol);
+          mp[4] = DC_find_closest_overlay_color(im3d->dc,mcol);
           drive_MCW_imseq( isq , isqDR_setmontage , (XtPointer)mp ) ;
         }
+        ms += mww*mhh ;
       }
 
       /* iconify [06 Aug 2002] */
@@ -921,6 +945,7 @@ ENTRY("AFNI_drive_open_window") ;
         int opaval = -1 ;
         sscanf( cpt+8 , "%d" , &opaval ) ;
         drive_MCW_imseq( isq , isqDR_setopacity , (XtPointer)ITOP(opaval) ) ;
+        ms += 100 ;
       }
 
       /* crop [03 May 2007] */
@@ -934,6 +959,7 @@ ENTRY("AFNI_drive_open_window") ;
                iar+0 , &s1 , iar+1 , &s2 , iar+2 , &s3 , iar+3 ) ;
         if( iar[0] >= 0 && iar[1] >= iar[0] && iar[2] >= 0 && iar[3] >= iar[2] )
           drive_MCW_imseq( isq , isqDR_set_crop , (XtPointer)iar ) ;
+        ms += 100 ;
       }
 
       /* range [15 Oct 2012] */
@@ -945,6 +971,7 @@ ENTRY("AFNI_drive_open_window") ;
         sscanf( cpt+6 , "%f%c%f" , rrr+0 , &s1 , rrr+1 ) ;
         if( rrr[0] >= rrr[1] ) rrr[0] = rrr[1] = 0.0f ;
         drive_MCW_imseq( isq , isqDR_setrange , (XtPointer)rrr ) ;
+        ms += 100 ;
       }
 
       /* overlay_label [19 May 2017] */
@@ -963,6 +990,7 @@ ENTRY("AFNI_drive_open_window") ;
           ISQ_overlay_label_CB( NULL , (XtPointer)isq , &cbs ) ;
           free(cbs.cval) ;
         }
+        ms += 100 ;
       }
 
       /* keypress [18 Feb 2005] */
@@ -1000,18 +1028,25 @@ ENTRY("AFNI_drive_open_window") ;
           break ;  /* break out of this while(1) loop */
         }
         ccc = cpt+1 ;  /* scan from here for the next keypress= option */
+        ms += 100 ;
       } ;
+
+      if( ms > 0 ){ NI_sleep(ms) ; ms = 0 ; }
 
    /*--- opened a graph viewer: maybe modify it ---*/
 
    } else if( gra != NULL ){
+      int ms = 0 ;
 
       /* geometry */
 
-      if( gxx >= 0 && gyy >= 0 )
-        XtVaSetValues( gra->fdw_graph, XmNx, gxx, XmNy, gyy, NULL ) ;
-      if( gww > 0 && ghh > 0 )
-        XtVaSetValues( gra->fdw_graph, XmNwidth, gww, XmNheight, ghh, NULL ) ;
+      if( gxx >= 0 && gyy >= 0 ){
+        XtVaSetValues( gra->fdw_graph, XmNx, gxx, XmNy, gyy, NULL ) ; ms += 400 ;
+      }
+      if( gww > 0 && ghh > 0 ){
+        XtVaSetValues( gra->fdw_graph, XmNwidth, gww, XmNheight, ghh, NULL ) ; ms += 400 ;
+      }
+      if( ms > 0 ){ NI_sleep(ms) ; ms = 0 ; }
 
       /* matrix */
 
@@ -1021,6 +1056,7 @@ ENTRY("AFNI_drive_open_window") ;
         int mat = (int) strtod( cpt+7 , NULL ) ;
         if( mat > 0 )
           drive_MCW_grapher( gra , graDR_setmatrix , (XtPointer)ITOP(mat) ) ;
+        ms += 100 ;
       }
 
       /* pinnum OR pintop */
@@ -1033,6 +1069,7 @@ ENTRY("AFNI_drive_open_window") ;
         int pn = (int) strtod( cpt+7 , NULL ) ;
         if( pn >= MIN_PIN )
           drive_MCW_grapher( gra, graDR_setpinnum, (XtPointer)ITOP(pn) ) ;
+        ms += 100 ;
       }
 
       /* pinbot [19 Mar 2004] */
@@ -1043,6 +1080,7 @@ ENTRY("AFNI_drive_open_window") ;
         int pn = (int) strtod( cpt+7 , NULL ) ;
         if( pn > 0 )
           drive_MCW_grapher( gra, graDR_setpinbot, (XtPointer)ITOP(pn) ) ;
+        ms += 100 ;
       }
 
       /* iconify [06 Aug 2002] */
@@ -1073,20 +1111,26 @@ ENTRY("AFNI_drive_open_window") ;
           buf[1] = '\0' ;
           GRA_timer_stop( gra ) ;
           GRA_handle_keypress( gra , buf , NULL ) ;
+          ms += 50 ;
         } else {
           break ;  /* break out of this while(1) loop */
         }
         ccc = cpt+1 ;  /* scan from here for the next keypress= option */
       } ;
 
+      if( ms > 0 ){ NI_sleep(ms) ; ms = 0 ; }
+
    /*--- opened the controller itself: maybe move it ---*/
 
    } else {
+      int ms = 0 ;
 
       /* geometry */
 
-      if( gxx >= 0 && gyy >= 0 )
+      if( gxx >= 0 && gyy >= 0 ){
         XtVaSetValues( im3d->vwid->top_shell, XmNx, gxx, XmNy, gyy, NULL ) ;
+        ms += 400 ;
+      }
 
       /* iconify [06 Aug 2002] */
 
@@ -1097,10 +1141,13 @@ ENTRY("AFNI_drive_open_window") ;
                          im3d->dc->screen_num   ) ;
       }
 
+      if( ms > 0 ){ NI_sleep(ms) ; ms = 0 ; }
+
    }
 
    /*-- finito --*/
 
+   NI_sleep(16) ;
    XmUpdateDisplay( im3d->vwid->top_shell ) ;
    RETURN(0) ;
 }
@@ -2028,6 +2075,46 @@ ENTRY("AFNI_drive_set_threshnew") ;
 }
 
 /*------------------------------------------------------------------------*/
+/*! PBAR_SAVEIM [c] filename [dim=WxH[f]]   [19 Oct 2018] */
+
+static int AFNI_drive_pbar_saveim( char *cmd )
+{
+   int ic , dadd=2 ;
+   Three_D_View *im3d ;
+   char fname[256] , *cpt ;
+   MCW_choose_cbs cbs ;
+
+ENTRY("AFNI_drive_pbar_saveim") ;
+
+   if( cmd == NULL || strlen(cmd) < 1 ) RETURN(-1) ;
+
+   ic = AFNI_controller_code_to_index( cmd ) ;
+   if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
+
+   im3d = GLOBAL_library.controllers[ic] ;
+   if( !IM3D_OPEN(im3d) ) RETURN(-1) ;
+
+   fname[0] = '\0' ;
+   sscanf( cmd+dadd , "%254s" , fname ) ;
+   if( fname[0] == '\0' ) RETURN(-1) ;
+
+   cbs.reason = mcwCR_string ;
+   cbs.cval   = fname ;
+
+   cpt = strcasestr(cmd+dadd+strlen(fname),"dim=") ;
+   if( cpt != NULL && strlen(cpt+4) > 0 ){
+     char dname[356] ;
+     strcpy(dname,"AFNI_PBAR_IMXY ") ;
+     sscanf( cpt+4 , "%254s" , dname+strlen(dname) ) ;
+     AFNI_drive_setenv( dname ) ;
+   }
+
+   AFNI_finalize_saveim_CB( NULL , (XtPointer)im3d , &cbs ) ;
+
+   RETURN(0) ;
+}
+
+/*------------------------------------------------------------------------*/
 /*! SET_PBAR_NUMBER [c.]num
     as in "SET_PBAR_NUMBER A.3"
     use a large number (99, say) to turn on colorscale mode
@@ -2161,6 +2248,8 @@ ENTRY("AFNI_drive_set_pbar_all") ;
 
    pbar = im3d->vwid->func->inten_pbar ;
 
+   for( ii=0 ; ii <= NPANE_MAX ; ii++ ) pval[ii] = 0.0f ; /* 19 Dec 2018 */
+
    if( npan <= NPANE_MAX ){ /* discrete panes: get value=colorname array */
 
      for( ii=0 ; ii < npan ; ii++ ){
@@ -2168,7 +2257,7 @@ ENTRY("AFNI_drive_set_pbar_all") ;
        sscanf( cmd+dadd , "%f=%255s%n" , &val,str,&nn ) ;
        if( str[0] == '\0' || nn == 0 ) RETURN(-1) ;  /* can't parse */
 
-       col = DC_find_overlay_color( GLOBAL_library.dc , str ) ;
+       col = DC_find_closest_overlay_color( GLOBAL_library.dc , str ) ;
        if( col < 0 )                   RETURN(-1) ;  /* bad color name */
 
        for( jj=0 ; jj < ii ; jj++ )                  /* check ordering */
@@ -2367,7 +2456,7 @@ ENTRY("AFNI_set_func_range") ;
    if( val < 0.0f ) RETURN(-1) ;
 
    if( val == 0.0f ){
-     char clabel[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ;
+     static char clabel[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ;
      char str[8] ;
      sprintf(str,"%c.+",clabel[ic]) ;
      RETURN( AFNI_set_func_autorange(str) ) ;
@@ -2471,18 +2560,18 @@ ENTRY("AFNI_set_func_resam") ;
 }
 
 /*-------------------------------------------------------------------------*/
-/*! SET_FUNC_ALPHA [c.]mode [floor]
-   "SET_FUNC_RESAM A.Linear 0.2"
+/*! SET_FUNC_ALPHA [c.]mode
+   "SET_FUNC_ALPHA A.Yes"
 ---------------------------------------------------------------------------*/
 
 static int AFNI_set_func_alpha( char *cmd )  /* 10 Dec 2014 */
 {
-   int ic , dadd=2 , mode=0 ; float floor=0.0f ; char *cpt ;
+   int ic , dadd=2 , mode=0 ; char *cpt ;
    Three_D_View *im3d ;
 
 ENTRY("AFNI_set_func_alpha") ;
 
-   if( cmd == NULL || strlen(cmd) < 2 ) RETURN(-1) ;
+   if( cmd == NULL || strlen(cmd) < 1 ) RETURN(-1) ;
 
    ic = AFNI_controller_code_to_index( cmd ) ;
    if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
@@ -2490,35 +2579,46 @@ ENTRY("AFNI_set_func_alpha") ;
    im3d = GLOBAL_library.controllers[ic] ;
    if( !IM3D_OPEN(im3d) ) RETURN(-1) ;
 
-   cpt = strcasestr(cmd+dadd,"Linear") ;
-   if( cpt != NULL ){
-     mode = 1 ; cpt += 6 ;
-   } else {
-     cpt = strcasestr(cmd+dadd,"Quadratic") ;
-     if( cpt != NULL ){
-       mode = 2 ; cpt += 9 ;
-     } else {
-       cpt = strcasestr(cmd+dadd,"Off") ;
-       mode = 0 ;
-       if( cpt != NULL ){
-         cpt += 3 ;
-       } else {
-       }
-     }
+   for( cpt=cmd+dadd ; isspace(*cpt) ; cpt++ ) ; /*skip whitespace*/
+   if( *cpt == '\0' ) RETURN(-1) ;
+
+   mode = !( toupper(*cpt) == 'N' || strcasestr(cpt,"off") != NULL ) ;
+
+   if( im3d->vinfo->thr_use_alpha != mode ){
+     AFNI_func_thrtop_CB( im3d->vwid->func->thrtop_alpha_pb, im3d, NULL ) ;
    }
 
-   if( cpt != NULL && isspace(*cpt) ){
-     int kf ;
-     floor = (float)strtod(cpt+1,NULL) ;
-          if( floor < 0.0f ) floor = 0.0f ;
-     else if( floor > 0.8f ) floor = 0.8f ;
-     im3d->vinfo->thr_alpha_floor = floor ;
-     kf = (int)rintf(floor/0.2f) ;
-     if( kf >= 0 && kf <= 4 ) AV_assign_ival( im3d->vwid->func->thr_floor_av , kf) ;
-   }
+   RETURN(0) ;
+}
 
-   AV_assign_ival    ( im3d->vwid->func->thr_alpha_av , mode ) ;
-   AFNI_func_alpha_CB( im3d->vwid->func->thr_alpha_av , im3d ) ;
+/*-------------------------------------------------------------------------*/
+/*! SET_FUNC_BOXED [c.]mode
+   "SET_FUNC_BOXED A.Yes"
+---------------------------------------------------------------------------*/
+
+static int AFNI_set_func_boxed( char *cmd )  /* 10 Dec 2014 */
+{
+   int ic , dadd=2 , mode=0 ; char *cpt ;
+   Three_D_View *im3d ;
+
+ENTRY("AFNI_set_func_boxed") ;
+
+   if( cmd == NULL || strlen(cmd) < 1 ) RETURN(-1) ;
+
+   ic = AFNI_controller_code_to_index( cmd ) ;
+   if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
+
+   im3d = GLOBAL_library.controllers[ic] ;
+   if( !IM3D_OPEN(im3d) ) RETURN(-1) ;
+
+   for( cpt=cmd+dadd ; isspace(*cpt) ; cpt++ ) ; /*skip whitespace*/
+   if( *cpt == '\0' ) RETURN(-1) ;
+
+   mode = !( toupper(*cpt) == 'N' || strcasestr(cpt,"off") != NULL ) ;
+
+   if( im3d->vinfo->thr_use_boxed != mode ){
+     AFNI_func_thrtop_CB( im3d->vwid->func->thrtop_boxed_pb, im3d, NULL ) ;
+   }
 
    RETURN(0) ;
 }
@@ -2614,8 +2714,7 @@ int AFNI_drive_setenv( char *cmd )
 
    /*-- display edges only of overlay blobs --*/
 
-   else if( strcmp(nam,"AFNI_EDGIZE_OVERLAY") == 0 ||
-            strcmp(nam,"AFNI_OVERLAY_ZERO")   == 0   ){
+   else if( strcmp(nam,"AFNI_OVERLAY_ZERO") == 0 ){
       PLUTO_force_redisplay() ;
    }
 
@@ -2817,9 +2916,9 @@ ENTRY("AFNI_drive_save_1image") ;
    /* extract the filename to save into */
 
    junk[0] = fname[0] = '\0' ;
-   sscanf( cmd+dadd , "%255s%255s" , junk , fname ) ;
+   sscanf( cmd+dadd , "%255s %255s" , junk , fname ) ;
    if( junk[0] == '\0' || fname[0] == '\0' ){
-     ERROR_message("Image save '%s': something is missing",cmd); RETURN(-1);
+     ERROR_message("Image save '%s': something is missing",cmd) ;
      RETURN(-1) ;
    }
    if( fname[0] == '\'' || fname[0] == '\"' ){
@@ -2962,7 +3061,7 @@ ENTRY("AFNI_drive_save_allimages") ;
    /* extract the filename to save into */
 
    junk[0] = fname[0] = '\0' ;
-   sscanf( cmd+dadd , "%255s%255s" , junk , fname ) ;
+   sscanf( cmd+dadd , "%255s %255s" , junk , fname ) ;
    if( junk[0] == '\0' || fname[0] == '\0' ){
      ERROR_message("Saving All Images '%s': something is missing",cmd); RETURN(-1);
    }
@@ -3262,7 +3361,7 @@ static int AFNI_drive_set_xhairs( char *cmd )
    Three_D_View *im3d ;
    int i,j,k ;
 
-   if( strlen(cmd) < 3 ) return -1;
+   if( strlen(cmd) < 1 ) return -1;
 
    ic = AFNI_controller_code_to_index( cmd ) ;
    if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
@@ -3685,37 +3784,180 @@ static int AFNI_drive_write_cont_spxhelp( char *cmd )
 
 /*--------------------------------------------------------------------*/
 /* SNAP_CONT prefix
-   Take a selfie of the main controller*/
+   Take a selfie of a main AFNI controller. */
+/*--------------------------------------------------------------------*/
+
 static int AFNI_drive_snap_cont( char *cmd )
 {
    int ic, dadd=2 , ii ;
    Three_D_View *im3d ;
    char *prefix;
 
-   if( strlen(cmd) < 3 ) return -1 ;
+ENTRY("AFNI_drive_snap_cont") ;
+
+   if( strlen(cmd) < 3 ) RETURN(-1) ;
 
    ic = AFNI_controller_code_to_index( cmd ) ;
    if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
    im3d = GLOBAL_library.controllers[ic] ;
-   if( !IM3D_OPEN(im3d) ||  !im3d->vwid->top_form) return -1 ;
+   if( !IM3D_OPEN(im3d) ||  !im3d->vwid->top_form) RETURN(-1) ;
    if ( ! XtIsManaged(im3d->vwid->top_form) ||
         ! XtIsRealized(im3d->vwid->top_form) )  {
       fprintf(stderr,"im3d->vwid->top_form ot realized (%d) or managed (%d)\n",
          XtIsRealized(im3d->vwid->top_form), XtIsManaged(im3d->vwid->top_form));
-      return -1 ;
+      RETURN(-1) ;
    }
 
    /* skip blanks */
 
    for( ii=dadd ; cmd[ii] != '\0' && isspace(cmd[ii]) ; ii++ ) ; /*nada*/
-   prefix = cmd+ii ; if( !THD_filename_ok(prefix) ) return -1 ;
+   prefix = cmd+ii ; if( !THD_filename_ok(prefix) ) RETURN(-1) ;
 
-   ISQ_snapfile2 ( im3d->vwid->top_form,  prefix);
+   ii = ISQ_snapfile2 ( im3d->vwid->top_form,  prefix);
 
-   return 0 ;
+   RETURN(ii) ;
 }
 
 /*--------------------------------------------------------------------*/
+/* SNAP_VIEWER A.viewer prefix
+   Take a selfie of a viewer window. */
+/*--------------------------------------------------------------------*/
+
+static int AFNI_drive_snap_viewer( char *cmd )
+{
+   int ic, dadd=2 , ii ;
+   Three_D_View *im3d ;
+   char *prefix;
+   MCW_imseq   *isq=NULL ;
+   MCW_grapher *gra=NULL ;
+   char junk[256] , fname[599] , *cpt ;
+   Widget wsnap=(Widget)NULL ;
+
+ENTRY("AFNI_drive_snap_viewer") ;
+
+   if( strlen(cmd) < 3 ) RETURN(-1) ;
+
+   /* make sure the controller itself is open */
+
+   ic = AFNI_controller_code_to_index( cmd ) ;
+   if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
+   im3d = GLOBAL_library.controllers[ic] ;
+   if( !IM3D_VALID(im3d) ){
+     ERROR_message("Viewer snapshot '%s': controller not open",cmd) ;
+     RETURN(-1) ;
+   }
+
+   /* find graph or image window */
+
+        if( HAS_axialimage   (cmd+dadd) ) isq = im3d->s123 ;
+   else if( HAS_sagittalimage(cmd+dadd) ) isq = im3d->s231 ;
+   else if( HAS_coronalimage (cmd+dadd) ) isq = im3d->s312 ;
+   else if( HAS_axialgraph   (cmd+dadd) ) gra = im3d->g123 ;
+   else if( HAS_sagittalgraph(cmd+dadd) ) gra = im3d->g231 ;
+   else if( HAS_coronalgraph (cmd+dadd) ) gra = im3d->g312 ;
+
+   if( isq == NULL && gra == NULL ){
+     ERROR_message("Viewer snapshot '%s': no viewer window specified",cmd) ;
+     RETURN(-1) ;
+   }
+
+   /* extract the filename to save into */
+
+   junk[0] = fname[0] = '\0' ;
+   sscanf( cmd+dadd , "%255s %255s" , junk , fname ) ;
+   if( junk[0] == '\0' || fname[0] == '\0' ){
+     ERROR_message("Viewer snapshot '%s': filename is missing",cmd) ;
+     RETURN(-1) ;
+   }
+   if( fname[0] == '\'' || fname[0] == '\"' ){
+     char qt=fname[0] , *q1 , *q2 ; int imm ;
+     q1 = strchr(cmd+dadd,qt)+1 ;
+     q2 = strchr(q1,qt) ; if( q2 == NULL ) q2 = cmd+strlen(cmd) ;
+     if( (imm=q2-q1) > 0 && imm < 599 ){
+       strncpy(fname,q1,imm) ; fname[imm] = '\0' ;
+     } else {
+       ERROR_message("Viewer snapshot '%s': filename is bad",cmd);
+       RETURN(-1);
+     }
+   }
+
+        if( isq != NULL ) wsnap = isq->wform ;
+   else if( gra != NULL ) wsnap = gra->top_form ;
+   else {
+     ERROR_message("Viewer snapshot '%s': no valid viewer specified",cmd);
+     RETURN(-1);
+   }
+
+   if( wsnap != (Widget)NULL )
+     ii = ISQ_snapfile2(wsnap,fname) ;
+   else {
+     ERROR_message("Viewer snapshot '%s': viewer window doesn't exist",cmd);
+     RETURN(-1);
+   }
+
+   RETURN(ii) ;
+}
+
+/*--------------------------------------------------------------------*/
+/* SET_ULAY_RANGE A.viewer bot top [ztop] -- 23 Jul 2018 (RWC) */
+/*--------------------------------------------------------------------*/
+
+/*- macro to redisplay image with new range -*/
+
+#define RNGIM(iq)                                     \
+ do{ if( (iq) != NULL ){                              \
+       (iq)->rng_extern = 0  ; (iq)->rng_ztop = ztop; \
+       (iq)->rng_bot    = bot; (iq)->rng_top  = top ; \
+       ISQ_redisplay( (iq) , -1 , isqDR_reimage ) ;   \
+     } } while(0)
+
+static int AFNI_drive_underlay_range( char *cmd )
+{
+   int ic, dadd=2 ;
+   Three_D_View *im3d=NULL ;
+   MCW_imseq    *isq=NULL ;
+   char junk[256] ;
+   float bot,top,ztop ;
+
+ENTRY("AFNI_drive_underlay_range") ;
+
+   if( strlen(cmd) < 3 ) RETURN(-1) ;
+
+   /* make sure the controller itself is open */
+
+   ic = AFNI_controller_code_to_index( cmd ) ;
+   if( ic < 0 ){ ic = 0 ; dadd = 0 ; }
+   im3d = GLOBAL_library.controllers[ic] ;
+   if( !IM3D_VALID(im3d) ){
+     ERROR_message("Command '%s': controller not open",cmd) ;
+     RETURN(-1) ;
+   }
+
+   /* check if doing all image windows for this controller */
+   /* (and get the ranging numbers at the same time) */
+
+   junk[0] = '\0' ; bot = top = ztop = 0.0f ;
+   sscanf( cmd+dadd , "%255s %f%f%f" , junk , &bot , &top , &ztop ) ;
+   if( strncasecmp(junk,"all",3) == 0 ){
+     RNGIM(im3d->s123) ;
+     RNGIM(im3d->s231) ;
+     RNGIM(im3d->s312) ;
+     RETURN(0) ;
+   }
+
+   /* find single image window */
+
+        if( HAS_axialimage   (cmd+dadd) ){ RNGIM(im3d->s123); RETURN(0); }
+   else if( HAS_sagittalimage(cmd+dadd) ){ RNGIM(im3d->s231); RETURN(0); }
+   else if( HAS_coronalimage (cmd+dadd) ){ RNGIM(im3d->s312); RETURN(0); }
+
+   ERROR_message("Command '%s': no image window specified",cmd) ;
+   RETURN(1) ;
+}
+#undef RNGIM
+
+/*--------------------------------------------------------------------*/
+/* See README.driver for details */
 
 void AFNI_driver_register( char *cmd , int (*cbfun)(char *) )
 {

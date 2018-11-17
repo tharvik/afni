@@ -15,14 +15,21 @@
      array of floats, with an integer array carried along in the swaps */
 
 void qsrec_short( int , short * , int ) ;
-void qsrec_int  ( int , int   * , int ) ;
 void qsrec_float( int , float * , int ) ;
 void qsrec_pair ( int , float * , int * , int ) ;
 
+static void qsrec_int  ( int , int   * , int ) ;
+
+#undef  QS_CUTOFF
+#undef  QS_SWAP
+#undef  QS_SWAPI
+#undef  QS_SMALL
 #define QS_CUTOFF     40       /* cutoff to switch from qsort to isort */
 #define QS_SMALL      21
-#define QS_STACK      4096     /* qsort stack size */
 #define QS_SWAP(x,y)  (temp=(x), (x)=(y),(y)=temp)
+#ifndef QS_STACK
+# define QS_STACK 9999
+#endif
 
 /***************************************************************************
      Each qsort_TYPE routine (TYPE=short, int, float, or pair) has two
@@ -177,7 +184,7 @@ void qsort_short( int n , short *a )
 /*----------------------------------------------------------------------------*/
 /*------------- insertion sort : sort an array of int in-place ---------------*/
 
-void isort_int( int n , int *ar )
+static void isort_int( int n , int *ar )
 {
    register int  j , p ;  /* array indices */
    register int temp ;    /* a[j] holding place */
@@ -202,7 +209,7 @@ void isort_int( int n , int *ar )
 
 /*--------- qsrec : recursive part of quicksort (stack implementation) ----------*/
 
-void qsrec_int( int n , int *ar , int cutoff )
+static void qsrec_int( int n , int *ar , int cutoff )
 {
    register int i , j ;         /* scanning indices */
    register int temp , pivot ;  /* holding places */
@@ -274,7 +281,7 @@ void qsrec_int( int n , int *ar , int cutoff )
 
 void qsort_int( int n , int *a )
 {
-   if( n <= 1 ) return ;
+   if( a == NULL || n <= 1 ) return ;
    switch(n){
      default:                    break ;  /* handled below */
      case  2:  qsort2_int(a) ; return ;
@@ -302,6 +309,17 @@ void qsort_int( int n , int *a )
    }
    qsrec_int( n , a , QS_CUTOFF ) ;
    isort_int( n , a ) ;
+   return ;
+}
+
+/*------------------------------------------------------------------------------*/
+
+void qsort_int_mostly( int n , int *a , int cut ) /* 12 Aug 2017 */
+{
+   if( cut < 3 || cut >= n || n < 28 ){
+     qsort_int(n,a) ; return ;
+   }
+   qsrec_int( n , a , cut ) ;
    return ;
 }
 

@@ -283,6 +283,7 @@ static char ** ppmto_filter  = NULL ;
 static char ** ppmto_suffix  = NULL ;
 static int   * ppmto_bval    = NULL ;
 static int     ppmto_num     = -1 ;
+static int   * ppmto_gimpize = NULL ;
 
 static char *  ppmto_gif_filter  = NULL ;   /* 27 Jul 2001 */
 static char *  ppmto_agif_filter = NULL ;
@@ -299,6 +300,8 @@ static char *  ppmto_ppm_filter  = NULL ;
 static char *  ppmto_jpg75_filter = NULL ;  /* 27 Mar 2002 */
 static char *  ppmto_jpg95_filter = NULL ;  /* 28 Jul 2005 */
 static char *  ppmto_png_filter   = NULL ;  /* 07 Dec 2006 */
+
+static char *  gimp_path          = NULL ;  /* 27 Oct 2017 */
 
  /* the first %s will be the list of input gif filenames     */
  /* the second %s is the single output animated gif filename */
@@ -323,16 +326,19 @@ static char *  ppmto_png_filter   = NULL ;  /* 07 Dec 2006 */
      ((sss)->mont_nx == 1 && (sss)->mont_ny     == 1)      )
 #endif
 
-#define ADDTO_PPMTO(pnam,suff,bbb)                                       \
+#define ADDTO_PPMTO(pnam,suff,bbb,ggg)                                   \
   do{ ppmto_filter = (char **) realloc( ppmto_filter ,                   \
                                         sizeof(char *)*(ppmto_num+1) ) ; \
       ppmto_suffix = (char **) realloc( ppmto_suffix  ,                  \
                                         sizeof(char *)*(ppmto_num+1) ) ; \
       ppmto_bval   = (int *)   realloc( ppmto_bval    ,                  \
                                         sizeof(int)   *(ppmto_num+1) ) ; \
-      ppmto_filter[ppmto_num] = (pnam) ;                                 \
-      ppmto_suffix[ppmto_num] = (suff) ;                                 \
-      ppmto_bval  [ppmto_num] = (bbb)  ; ppmto_num++ ;                   \
+      ppmto_gimpize= (int *)   realloc( ppmto_gimpize ,                  \
+                                        sizeof(int)   *(ppmto_num+1) ) ; \
+      ppmto_filter [ppmto_num] = (pnam) ;                                \
+      ppmto_suffix [ppmto_num] = (suff) ;                                \
+      ppmto_bval   [ppmto_num] = (bbb)  ;                                \
+      ppmto_gimpize[ppmto_num] = (ggg)&&(gimp_path!=NULL); ppmto_num++;  \
       if( dbg ) fprintf(stderr,"IMSAVE: filter '%s' for suffix '%s'\n",  \
                         (pnam) , (suff) ) ;                              \
   } while(0)
@@ -362,6 +368,15 @@ void ISQ_setup_ppmto_filters(void)
 
    dbg = AFNI_yesenv("AFNI_IMSAVE_DEBUG") ;  /* 03 Sep 2004 */
 
+   /*-- path to open gimp [27 Oct 2017] --*/
+
+   pg = THD_find_executable( "gimp" ) ;
+   if( pg != NULL ) gimp_path = strdup(pg) ;
+#ifdef DARWIN
+   else if( THD_is_directory("/Applications/GIMP.app") )
+     gimp_path = strdup("open -a /Applications/GIMP.app") ;
+#endif
+
    /*-- the cheap way to write PPM  --*/
    /*-- [this must always be first] --*/
 
@@ -369,7 +384,7 @@ void ISQ_setup_ppmto_filters(void)
    if( pg != NULL ){
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s > %%s",pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"ppm",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"ppm",bv,0) ;
 
       /* 02 Aug 2001: also try for mpeg */
 
@@ -404,7 +419,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
 #endif
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s -quality %d > %%s",pg,jpeg_compress);
-      bv <<= 1 ; ADDTO_PPMTO(str,"jpg",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"jpg",bv,1) ;
       ppmto_jpg95_filter = strdup(str) ;  /* 28 Jul 2005 */
 
       /* lower quality JPEGs */
@@ -424,7 +439,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
 
       str = AFMALL( char, strlen(pg)+strlen(pg2)+32) ;
       sprintf(str,"%s 255 | %s > %%s",pg2,pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"gif",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"gif",bv,0) ;
 
       /*-- 27 Jul 2001: also try for Animated GIF --*/
 
@@ -471,7 +486,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
    if( pg != NULL ){
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s -c none %%s",pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"tif",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"tif",bv,1) ;
    } else {                                      /* 03 Jul 2001:      */
       pg = THD_find_executable( "pnmtotiff" ) ;
       if( pg == NULL )
@@ -479,7 +494,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
       if( pg != NULL ){                          /* and pnmtotiff     */
          str = AFMALL( char, strlen(pg)+32) ;    /* differently       */
          sprintf(str,"%s > %%s",pg) ;
-         bv <<= 1 ; ADDTO_PPMTO(str,"tif",bv) ;
+         bv <<= 1 ; ADDTO_PPMTO(str,"tif",bv,1) ;
       }
       else { CANT_FIND("ppm2tiff OR pnmtotiff OR pamtotiff","TIFF"); need_netpbm++; }
    }
@@ -493,13 +508,13 @@ printf("\njpeg_compress %d\n", jpeg_compress);
      if( pg != NULL && pg2 != NULL ){
         str = AFMALL( char, strlen(pg)+strlen(pg2)+32) ;
         sprintf(str,"%s 255 | %s -windows > %%s",pg2,pg) ;
-        bv <<= 1 ; ADDTO_PPMTO(str,"bmp",bv) ;
+        bv <<= 1 ; ADDTO_PPMTO(str,"bmp",bv,0) ;
      }
      else { CANT_FIND("ppmtobmp AND/OR ppmquant","BMP"); need_netpbm++; }
    } else if( pg != NULL ){                   /* 21 Feb 2003: don't quantize */
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s -bpp 24 -windows > %%s",pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"bmp",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"bmp",bv,0) ;
    }
    else { CANT_FIND("ppmtobmp","BMP"); need_netpbm++; }
 
@@ -509,7 +524,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
    if( pg != NULL ){
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s -noturn > %%s",pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"eps",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"eps",bv,0) ;
    }
 #if 0
    else { CANT_FIND("pnmtops","EPS"); need_netpbm++; }
@@ -522,7 +537,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
    if( pg != NULL && pg2 != NULL ){            /* check pg!=NULL */
       str = AFMALL( char, strlen(pg)+strlen(pg2)+32) ;
       sprintf(str,"%s -noturn | %s --filter > %%s",pg,pg2) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"pdf",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"pdf",bv,0) ;
    }
    else CANT_FIND("pnmtops AND/OR epstopdf","PDF") ;
 #endif
@@ -533,7 +548,7 @@ printf("\njpeg_compress %d\n", jpeg_compress);
    if( pg != NULL ){
       str = AFMALL( char, strlen(pg)+32) ;
       sprintf(str,"%s -compression 9 > %%s",pg) ;
-      bv <<= 1 ; ADDTO_PPMTO(str,"png",bv) ;
+      bv <<= 1 ; ADDTO_PPMTO(str,"png",bv,1) ;
       ppmto_png_filter = strdup(str) ;  /* 07 Dec 2007 */
    }
    else { CANT_FIND("pnmtopng","PNG"); need_netpbm; }
@@ -1118,7 +1133,7 @@ if( PRINT_TRACING ){
                           | KeyPressMask        /* get keystrokes */
                           | ButtonPressMask     /* button presses */
                           | ExposureMask        /* exposures */
-                          | StructureNotifyMask /* resizes */
+                          | StructureNotifyMask /* resizes (Configure events) */
                           | Button1MotionMask   /* motion while #1 is down */
                           | ButtonReleaseMask   /* button releases */
                          ,
@@ -1635,7 +1650,7 @@ if( PRINT_TRACING ){
                             0
                           | ButtonPressMask      /* button presses */
                           | ExposureMask         /* exposures */
-                          | StructureNotifyMask  /* resizes */
+                          | StructureNotifyMask  /* resizes (Configure events) */
                          ,
                          FALSE ,                 /* nonmaskable events? */
                          ISQ_drawing_EV ,        /* super-handler! */
@@ -1736,7 +1751,8 @@ if( PRINT_TRACING ){
    newseq->vgize_fac = INDEX_TO_VGFAC(2) ;
 
    newseq->zer_color = 0 ;
-   ii = DC_find_overlay_color( newseq->dc , getenv("AFNI_IMAGE_ZEROCOLOR") ) ;
+   ii = DC_find_closest_overlay_color( newseq->dc ,
+                                       getenv("AFNI_IMAGE_ZEROCOLOR") ) ;
    if( ii > 0 ) newseq->zer_color = ii ;
 
    { char *blab[1] = { "Crop Autocenter?" } ;
@@ -3917,7 +3933,7 @@ void ISQ_saver_CB( Widget w , XtPointer cd , int nval , void **val )
    int dbg ;                          /* 03 Sep 2004 */
    int adup=1 , akk,aa ;              /* 09 Feb 2009 */
 
-   char *cval1 ; int ival2 , ival3=0 , ival4=0 , ll ;  /* 26 Nov 2013 */
+   char *cval1; int ival2, ival3=0, ival4=0, ll, use_gimp=0 ; /* 26 Nov 2013 */
 
 #ifndef DONT_USE_METER
 #  define METER_MINCOUNT 20
@@ -3927,13 +3943,16 @@ void ISQ_saver_CB( Widget w , XtPointer cd , int nval , void **val )
 
 ENTRY("ISQ_saver_CB") ;
 
-   if( nval != 2 && nval != 4 ) EXRETURN ;  /* bad inputs */
+   if( nval < 2 || nval > 4 ) EXRETURN ;  /* bad inputs */
 
    cval1 = (char *)val[0] ;  /* copy input values to local variables */
    ival2 = (int)(intptr_t)val[1] ;
-   if( nval > 2 ){
+   if( nval == 4 ){
      ival3 = (int)(intptr_t)val[2] ;
      ival4 = (int)(intptr_t)val[3] ;
+   } else if( nval == 3 ){            /* 27 Oct 2017 */
+     char *cpt = (char *)val[2] ;
+     use_gimp  = (cpt != NULL) && *cpt == 'Y' ;
    }
    if( cval1 == NULL || *cval1 == '\0' ) EXRETURN ;
    ll = strlen(cval1) ; if( ll > 32 ) EXRETURN ;
@@ -3987,7 +4006,7 @@ ENTRY("ISQ_saver_CB") ;
 
       /*-- April 1996: Save One case here --*/
 
-      if( nval == 2 ){
+      if( nval == 2 || nval == 3 ){
          char *ppnm = strstr( seq->saver_prefix , ".pnm." ) ;
          int   sll  = strlen( seq->saver_prefix ) ;
 
@@ -4113,6 +4132,12 @@ ENTRY("ISQ_saver_CB") ;
                   fprintf(stderr,"** filter command was %s\n",filt) ;
                   POPDOWN_first_one ; mri_free(tim) ; EXRETURN ;
                }
+
+               /* 27 Oct 2017 */
+               if( gimp_path != NULL && use_gimp && THD_is_file(fname) ){
+                 sprintf(filt,"%s %s &",gimp_path,fname) ;
+                 system(filt) ;
+               }
             }
 
             mri_free( tim ) ; tim = NULL ;  /* 17 June 1997 */
@@ -4134,6 +4159,8 @@ ENTRY("ISQ_saver_CB") ;
          EXRETURN ;
       }
    }
+
+   /*--- save many case here ---*/
 
    seq->saver_from = ival3 ;
    seq->saver_to   = ival4 ;
@@ -4716,10 +4743,19 @@ ENTRY("ISQ_but_save_CB") ;
    seq->saver_from = seq->saver_to = -1 ;
 
    if( seq->opt.save_one && !DO_ANIM(seq) ){
-     MCW_choose_stuff( w , "Image Saver (One)" , ISQ_saver_CB , (XtPointer)seq ,
-                         MSTUF_STRING , "Prefix"  ,
-                         MSTUF_INT    , "Blowup " , 1 , 8 , ibl ,
-                       MSTUF_END ) ;
+     if( seq->opt.save_filter >= 0 &&
+         ppmto_gimpize != NULL     && ppmto_gimpize[seq->opt.save_filter] ){
+       MCW_choose_stuff( w , "Image Saver (One)" , ISQ_saver_CB , (XtPointer)seq ,
+                           MSTUF_STRING , "Prefix"  ,
+                           MSTUF_INT    , "Blowup " , 1 , 8 , ibl ,
+                           MSTUF_YESNO  , "Open in Gimp?",
+                         MSTUF_END ) ;
+     } else {
+       MCW_choose_stuff( w , "Image Saver (One)" , ISQ_saver_CB , (XtPointer)seq ,
+                           MSTUF_STRING , "Prefix"  ,
+                           MSTUF_INT    , "Blowup " , 1 , 8 , ibl ,
+                         MSTUF_END ) ;
+     }
    } else {
      MCW_choose_stuff( w , "Image Saver (Multiple)" , ISQ_saver_CB , (XtPointer)seq ,
                          MSTUF_STRING , "Prefix"  ,
@@ -5359,6 +5395,12 @@ if( AFNI_yesenv("AFNI_IMSEQ_DEBUG") ){
 
      /**** actually put the image to the screen ****/
 
+#if 0
+INFO_message("ISQ_show_image(seq=%p) %d x %d",
+             (void *)seq ,
+             (int)seq->sized_xim->width , (int)seq->sized_xim->height ) ;
+#endif
+
      XPutImage( seq->dc->display , XtWindow(seq->wimage) , seq->dc->origGC ,
                 seq->sized_xim , 0,0,0,0,
                 seq->sized_xim->width , seq->sized_xim->height ) ;
@@ -5841,10 +5883,16 @@ DPRI(" .. Expose; count=",event->count) ;
 
 STATUS(" .. really a hidden resize") ;
 
+#if 0
+INFO_message("convert Expose to ConfigureNotify") ;
+#endif
                   nev.type = ConfigureNotify ; nev.width = nx ; nev.height = ny ;
                   ISQ_drawing_EV( w, client_data, (XEvent *) &nev, continue_to_dispatch ) ;
 
                } else
+#if 0
+INFO_message("Expose") ;
+#endif
                   ISQ_show_image( seq ) ;
             }
             else if( w == seq->wbar )
@@ -6123,7 +6171,7 @@ STATUS("scroll wheel ==> change slice") ;
       case ConfigureNotify:{
          XConfigureEvent *event = (XConfigureEvent *) ev ;
 
-         static int am_active = 0  ;  /* 09 Oct 1999 */
+         static int am_active = 0 ; /* 09 Oct 1999 */
 
 #if 0
          /* 04 Nov 2003: don't do anything while mouse is down */
@@ -6138,6 +6186,20 @@ STATUS("scroll wheel ==> change slice") ;
          if( am_active ) break ;      /* prevent recursion */
          am_active = 1 ;
 
+#if 0
+         /* Scan forward and see if another such event is
+            pending.  If so, don't process this one.
+            [doesn't work well - can result in not redrawing at proper size?] */
+
+         { XEvent evjunk ; int egood ;
+           egood = XCheckWindowEvent(XtDisplay(w),XtWindow(w),StructureNotifyMask,&evjunk) ;
+           if( egood && evjunk.type == ConfigureNotify ){
+             am_active = 0 ; break ;
+           }
+         }
+#endif
+
+
  if(PRINT_TRACING){
   char str[256] ;
   sprintf(str," .. ConfigureNotify: width=%d height=%d",
@@ -6150,9 +6212,18 @@ STATUS("scroll wheel ==> change slice") ;
 
          if( w == seq->wimage ){
 
-            if( (seq->sized_xim == NULL)                  ||
-                (event->width  != seq->sized_xim->width ) ||
-                (event->height != seq->sized_xim->height)   ){
+            int nx,ny ;
+#if 0
+            int ntime=NI_clock_time(); /* 09 May 2018 [useless?] */
+            static int ltime=-666;
+            if( ntime-ltime < 2 ){ am_active = 0 ; break ; } /* too fast? */
+            ltime = ntime ;
+#endif
+
+            MCW_widget_geom( seq->wimage , &nx , &ny , NULL,NULL ) ;
+            if( (seq->sized_xim == NULL)       ||
+                (nx != seq->sized_xim->width ) ||    /* modified 09 May 2018 */
+                (ny != seq->sized_xim->height)   ){  /* to check nx and ny */
 
                seq->wimage_width = seq->wimage_height = -1 ; /* Feb 1998 */
 
@@ -6165,29 +6236,43 @@ STATUS("scroll wheel ==> change slice") ;
 fprintf(stderr,"ConfigureNotify: width=%d height=%d\n",event->width,event->height);
 #endif
 
+#if 0 /* removed 10 May 2018 */
                if( AFNI_yesenv("AFNI_ENFORCE_ASPECT") && !seq->opt.free_aspect ){
-                 static int last_time=0 ; int now_time=NI_clock_time() ;
-                 if( now_time == 0 || now_time-last_time > 33 )
+                 static int last_time=-666 ; int now_time=NI_clock_time() ;
+                 if( now_time-last_time > 555 )
                    ISQ_reset_dimen( seq, seq->last_width_mm, seq->last_height_mm ) ;
 #if 0
 else fprintf(stderr,"  -- too soon to enforce aspect!\n") ;
 #endif
                  last_time = now_time ;
                }
+#endif
 
                /*-- now show the image in the new window size --*/
 
+#if 0
+INFO_message("ConfigureNotify") ;
+#endif
                ISQ_show_image( seq ) ;
+            } else {
+#if 0
+INFO_message("reject image ConfigureNotify") ;
+#endif
             }
 
          } else if( w == seq->wbar ){
-
-             if( (seq->sized_xbar == NULL)                  ||
-                 (event->width  != seq->sized_xbar->width ) ||
-                 (event->height != seq->sized_xbar->height)   ){
+             int nx,ny ;
+             MCW_widget_geom( seq->wbar , &nx , &ny , NULL,NULL ) ;
+             if( (seq->sized_xbar == NULL)       ||
+                 (nx != seq->sized_xbar->width ) ||
+                 (ny != seq->sized_xbar->height)   ){
 
                KILL_2ndXIM( seq->given_xbar , seq->sized_xbar ) ;
                ISQ_show_bar( seq ) ;
+            } else {
+#if 0
+INFO_message("reject wbar ConfigureNotify") ;
+#endif
             }
          }
 
@@ -13840,7 +13925,8 @@ ENTRY("ISQ_save_anim") ;
                   "%s%s.*.ppm [%06d-%06d]\n"  /* prefix, tsuf, from, to */
                   "END_INPUT\n"
                , oof , frate , pattrn , qscale ,
-                 ppo,tsuf,0,akk) ;
+                 /* akk is 1 too big, was corrected elsewhere  27 Nov 2017 */
+                 ppo,tsuf,0,akk-1) ;
         fclose(fpar) ;
         if( mpar ) free(pattrn) ;
 
@@ -14050,7 +14136,7 @@ static MRI_IMAGE * mri_vgize( MRI_IMAGE *iim )
 /* ININFO_message("max angle=%g",bmax) ; */
 
    /* rotate streak directions randomly */
-   if( bmax > 0.0f ){
+   if( bmax > 0.0f && vgize_sigfac > 0.0111f ){
      bmax = (22.2f * PI/180.0f) / bmax ;  /* max angle is 22.2 degrees */
      for( kk=0 ; kk < nxy ; kk++ ){
        bx = bxar[kk] ; by = byar[kk] ;
@@ -14071,5 +14157,6 @@ static MRI_IMAGE * mri_vgize( MRI_IMAGE *iim )
 
    mri_free(bxim) ; mri_free(byim) ; mri_free(im) ;
 
-   return blim ;
+   im = mri_sharpen_rgb(0.666f,blim) ; mri_free(blim) ; /* 26 Sep 2017 */
+   return im ;
 }

@@ -31,7 +31,7 @@ static char *INIT_labovr[DEFAULT_NCOLOVR] = {
 static int nx,nts , sep=1, sepscl=0;
 static float **yar , *xar ;
 static MCW_DC *dc ;
-static char *title = NULL , *wintitle = NULL, *xlabel = NULL , *ylabel = NULL ;
+static char *title=NULL , *wintitle=NULL, *xlabel=NULL , *ylabel=NULL ;
 
 static char *dfile_nar[6] = {
          "Roll [\\degree]" , "Pitch [\\degree]" , "Yaw [\\degree]"    ,
@@ -192,6 +192,11 @@ void usage_1dplot(int detail)
      "             [before the program scans the command line for options]\n"
      #endif
      "\n"
+     " -naked     = Do NOT plot axes or labels, just the graph(s).\n"
+     "              You might want to use '-nopush' with '-naked'.\n"
+     " -aspect A  = Set the width-to-height ratio of the plot region to 'A'.\n"
+     "              Default value is 1.3. Larger 'A' means a wider graph.\n"
+     "\n"
      " -stdin     = Don't read from tsfile; instead, read from\n"
      "              stdin and plot it. You cannot combine input\n"
      "              from stdin and tsfile(s).  If you want to do so,\n"
@@ -217,7 +222,7 @@ void usage_1dplot(int detail)
      "                 compressed without loss.\n"
      "               * PNG output requires that the netpbm program\n"
      "                 pnmtopng be installed somewhere in your PATH.\n"
-     "               * PNM output files are not compress, and are manipulable\n"
+     "               * PNM output files are not compressed, and are manipulable\n"
      "                 by the netpbm package: http://netpbm.sourceforge.net/\n"
      "\n"
      " -pngs SIZE fname } = a convenience function equivalent to\n"
@@ -252,6 +257,10 @@ void usage_1dplot(int detail)
      "                   For example:\n"
      "                     -xaxis 0:100:5:20\n"
      "                   Setting 'n' to 0 means no tic marks or labels.\n"
+     "                 * You can set 'b' to be greater than 't', to\n"
+     "                   have the x-coordinate decrease from left-to-right.\n"
+     "                 * This is the only way to have this effect in 1dplot.\n"
+     "                 * In particular, '-dx' with a negative value will not work!\n"
      "\n"
      " -yaxis b:t:n:m  = Similar to above, for the y-axis.  These\n"
      "                   options override the normal autoscaling\n"
@@ -275,6 +284,19 @@ void usage_1dplot(int detail)
      "                   can put a single '-' at the end of the label\n"
      "                   list to signal its end:\n"
      "                     1dplot -ynames a b c - file.1D\n"
+     "        TSV files: When plotting a TSV file, where the first row\n"
+     "                   is the set of column labels, you can use this\n"
+     "                   Unix trick to put the column labels here:\n"
+     "                     -ynames `head -1 file.tsv`\n"
+     "                   The 'head' command copies just the first line\n"
+     "                   of the file to stdout, and the backquotes `...`\n"
+     "                   capture stdout and put it onto the command line.\n"
+     "                 * You might need to put a single '-' after this\n"
+     "                   option to prevent the problem alluded to above.\n"
+     "                   In any case, it can't hurt to use '-' as an option\n"
+     "                   after '-ynames'.\n"
+     "                 * If any of the TSV labels start with the '-' character,\n"
+     "                   peculiar and unpleasant things might transpire.\n"
      "\n"
      " -volreg         = Makes the 'ynames' be the same as the\n"
      "                   6 labels used in plug_volreg for\n"
@@ -343,6 +365,8 @@ void usage_1dplot(int detail)
      " -plabel '\\Upsilon\\Phi\\Chi\\Psi\\Omega\\red\\leftrightarrow\\blue\\partial^{2}f/\\partial x^2'\n"
      "\n"
      TS_HELP_STRING
+     "\n"
+     TSV_HELP_STRING
    ) ;
 
    printf("\n"
@@ -452,6 +476,12 @@ void usage_1dplot(int detail)
      "                        [This option lets you make bar]\n"
      "                        [charts, *if* you care enough.]\n"
      "\n"
+     " -Rbox x1 y1 x2 y2 y3 color1 color2\n"
+     "                    = As above, with an extra horizontal line at y3.\n"
+     "\n"
+     " -line x1 y1 x2 y2 color dashcode\n"
+     "                    = Draw one line segment.\n"
+     "\n"
      "Another fun fun example:\n"
      "\n"
      "  1dplot -censor_RGB #ffa -CENSORTR '0-99'           \\\n"
@@ -560,6 +590,28 @@ int main( int argc , char *argv[] )
 
       /*----------*/
 
+      if( strcmp(argv[iarg],"-aspect") == 0 ){         /* 03 May 2018 */
+        float asp = (float)strtod(argv[++iarg],NULL) ;
+        if( asp > 0.0f && asp < 666.0f )
+          plot_ts_set_aspect(asp) ;
+        iarg++ ; continue ;
+      }
+
+      if( strcmp(argv[iarg],"-noaxes") == 0 ){         /* 03 May 2018 */
+        plot_ts_do_perim(0) ;
+        iarg++ ; continue ;
+      }
+
+      if( strcmp(argv[iarg],"-naked") == 0 ){          /* 03 May 2018 */
+        plot_ts_do_naked(1) ;
+        plot_ts_setthik(0.003f) ;
+        iarg++ ; continue ;
+      }
+      if( strcmp(argv[iarg],"-NAKED") == 0 ){          /* 09 May 2018 */
+        plot_ts_do_naked(2) ;
+        iarg++ ; continue ;
+      }
+
 #if 0
      if( strcmp(argv[iarg],"-vbox") == 0 ){   /* HIDDEN: just for testing */
        float xb1,xb2 ;
@@ -571,20 +623,54 @@ int main( int argc , char *argv[] )
 #endif
 
      if( strcmp(argv[iarg],"-rbox") == 0 ){
-       float x1,y1 , x2,y2 , r1,g1,b1 , r2,g2,b2 ; int qq ;
+       float x1,y1 , x2,y2,y3 , r1,g1,b1 , r2,g2,b2 ; int qq ;
+       x1 = (float)strtod(argv[++iarg],NULL) ;
+       y1 = (float)strtod(argv[++iarg],NULL) ;
+       x2 = (float)strtod(argv[++iarg],NULL) ;
+       y2 = (float)strtod(argv[++iarg],NULL) ; y3 = 1.666e18f ;
+       qq = find_color_name( argv[++iarg] , &r1,&g1,&b1 ) ;
+       if( qq < 0 ){
+         ERROR_message("-rbox: bad 1st color name '%s'",argv[iarg]) ; iarg++ ; continue ;
+       }
+       qq = find_color_name( argv[++iarg] , &r2,&g2,&b2 ) ;
+       if( qq < 0 ){
+         ERROR_message("-rbox: bad 2nd color name '%s'",argv[iarg]) ; iarg++ ; continue ;
+       }
+       plot_ts_add_rbox( 0 , x1,y1 , x2,y2,y3 , r1,g1,b1 , r2,g2,b2 ) ;
+       iarg++ ; continue ;
+     }
+
+     if( strcmp(argv[iarg],"-Rbox") == 0 ){
+       float x1,y1 , x2,y2,y3 , r1,g1,b1 , r2,g2,b2 ; int qq ;
+       x1 = (float)strtod(argv[++iarg],NULL) ;
+       y1 = (float)strtod(argv[++iarg],NULL) ;
+       x2 = (float)strtod(argv[++iarg],NULL) ;
+       y2 = (float)strtod(argv[++iarg],NULL) ;
+       y3 = (float)strtod(argv[++iarg],NULL) ;
+       qq = find_color_name( argv[++iarg] , &r1,&g1,&b1 ) ;
+       if( qq < 0 ){
+         ERROR_message("-Rbox: bad 1st color name '%s'",argv[iarg]) ; iarg++ ; continue ;
+       }
+       qq = find_color_name( argv[++iarg] , &r2,&g2,&b2 ) ;
+       if( qq < 0 ){
+         ERROR_message("-Rbox: bad 2nd color name '%s'",argv[iarg]) ; iarg++ ; continue ;
+       }
+       plot_ts_add_rbox( 0 , x1,y1 , x2,y2,y3 , r1,g1,b1 , r2,g2,b2 ) ;
+       iarg++ ; continue ;
+     }
+
+     if( strcmp(argv[iarg],"-line") == 0 ){
+       float x1,y1 , x2,y2 , r1,g1,b1 ; int qq ;
        x1 = (float)strtod(argv[++iarg],NULL) ;
        y1 = (float)strtod(argv[++iarg],NULL) ;
        x2 = (float)strtod(argv[++iarg],NULL) ;
        y2 = (float)strtod(argv[++iarg],NULL) ;
        qq = find_color_name( argv[++iarg] , &r1,&g1,&b1 ) ;
        if( qq < 0 ){
-         ERROR_message("bad color name '%s'",argv[iarg]) ; iarg++ ; continue ;
+         ERROR_message("-line: bad color name '%s'",argv[iarg]) ; iarg++ ; continue ;
        }
-       qq = find_color_name( argv[++iarg] , &r2,&g2,&b2 ) ;
-       if( qq < 0 ){
-         ERROR_message("bad color name '%s'",argv[iarg]) ; iarg++ ; continue ;
-       }
-       plot_ts_add_rbox( 0 , x1,y1 , x2,y2 , r1,g1,b1 , r2,g2,b2 ) ;
+       qq = (int)strtod(argv[++iarg],NULL) ;
+       plot_ts_add_tlin( 0 , x1,y1 , x2,y2 , r1,g1,b1 , qq ) ;
        iarg++ ; continue ;
      }
 
@@ -636,8 +722,13 @@ int main( int argc , char *argv[] )
      if( strcmp(argv[iarg],"-xaxis") == 0 ){   /* 22 Jul 2003 */
        if( iarg == argc-1 ) ERROR_exit("need argument after option %s",argv[iarg]) ;
        sscanf(argv[++iarg],"%f:%f:%d:%d",&xbot,&xtop,&nnax,&mmax) ;
+#if 0
        if( xbot >= xtop || nnax < 0 || mmax < 1 )
          ERROR_exit("String after -xaxis is illegal!\n") ;
+#else
+       if( xbot == xtop || nnax < 0 || mmax < 1 )
+         ERROR_exit("String after -xaxis is illegal!\n") ;
+#endif
 
        plot_ts_xfix( nnax,mmax , xbot,xtop ) ;
        iarg++ ; continue ;
@@ -1240,7 +1331,7 @@ int main( int argc , char *argv[] )
 
        inim = mri_read_1D( argv[iarg] ) ;
        if( inim == NULL )
-         ERROR_exit("Can't read input file '%s'\n",argv[iarg]) ;
+         ERROR_exit("Can't read input file '%s' iarg=%d\n",argv[iarg],iarg) ;
 
      } else {                              /* multiple inputs [05 Mar 2003] */
        MRI_IMARR *imar ;                   /* read them & glue into 1 image */
@@ -1257,7 +1348,7 @@ int main( int argc , char *argv[] )
        for( ; iarg < argc ; iarg++ ){
          inim = mri_read_1D( argv[iarg] ) ;
          if( inim == NULL )
-           ERROR_exit("Can't read input file '%s'\n",argv[iarg]) ;
+           ERROR_exit("Can't read input file '%s' iarg=%d\n",argv[iarg],iarg) ;
 
            if( inim->nx == 1 && inim->ny > 1 ){
              flim = mri_transpose(inim); mri_free(inim); inim = flim;
