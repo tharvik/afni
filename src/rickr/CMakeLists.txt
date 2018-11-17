@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 project(rickr)
 
-set(RICKR_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}")
+set(RICKR_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}")
 set(RICKR_INCLUDE_DIRS "${RICKR_INCLUDE_DIRS}" PARENT_SCOPE)
 set(IMON_OBJS l_mcw_glob.c realtime.c)
 
@@ -38,4 +38,12 @@ add_executable(3dresample 3dresample.c)
 target_link_libraries(3dresample mri)
 
 add_library(rickr r_new_resam_dset.c r_idisp.c r_misc.c)
-target_link_libraries(rickr niml)
+
+target_include_directories(rickr PUBLIC niml)
+
+install(TARGETS rickr column_cat serial_helper Dimon1 Dimon tokens file_tool 
+       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+       LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+       PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)  

@@ -10,7 +10,6 @@ find_package(GLw REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Xmu REQUIRED)
-find_package(Xp REQUIRED)
 find_package(Xt REQUIRED)
 find_package(Xext REQUIRED)
 find_package(X11 REQUIRED)
@@ -24,7 +23,6 @@ include_directories(
 	${GLUT_INCLUDE_DIR}
 	${OPENGL_INCLUDE_DIRS}
 	${XMU_INCLUDE_DIRS}
-	${XP_INCLUDE_DIRS}
 	${XT_INCLUDE_DIRS}
 	${XEXT_INCLUDE_DIRS}
 	${X11_INCLUDE_DIRS}

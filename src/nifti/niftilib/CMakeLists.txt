@@ -9,10 +9,10 @@ add_library(${NIFTI_NIFTILIB_NAME} ${NIFTILIB_SRC} )
 target_link_libraries( ${NIFTI_NIFTILIB_NAME} ${PACKAGE_PREFIX}znz)
 
 set_property(TARGET ${NIFTI_NIFTILIB_NAME} PROPERTY INTERFACE_INCLUDE_DIRECTORIES
-	"${PROJECT_SOURCE_DIR}/nifti2"
-	"${PROJECT_SOURCE_DIR}/niftilib"
-	"${PROJECT_SOURCE_DIR}/nifticdf"
-	"${PROJECT_SOURCE_DIR}/znzlib"
+	"${CMAKE_CURRENT_SOURCE_DIR}/nifti2"
+	"${CMAKE_CURRENT_SOURCE_DIR}/niftilib"
+	"${CMAKE_CURRENT_SOURCE_DIR}/nifticdf"
+	"${CMAKE_CURRENT_SOURCE_DIR}/znzlib"
 )
 
 # Set library version when building shared libs.

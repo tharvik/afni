@@ -1,79 +1,69 @@
-FROM ubuntu:bionic-20180526@sha256:c8c275751219dadad8fa56b3ac41ca6cb22219ff117ca98fe82b42f24e1ba64e
+# FROM jupyter/base-notebook
+# USER root
+# ENV DEBIAN_FRONTEND=noninteractive
+FROM neurodebian:xenial
+# Prepare environment
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+                    curl \
+                    bzip2 \
+                    ca-certificates \
+                    xvfb \
+                    cython3 \
+                    build-essential \
+                    autoconf \
+                    libtool \
+                    ncurses-dev \
+                    vim \
+                    git \
+                    libmotif-dev \
+                    libnetcdf-dev \
+                    tcsh \
+                    r-base \
+                    python-qt4 \
+                    wget \
+                    pkg-config 
+#     curl -sSL http://neuro.debian.net/lists/xenial.us-ca.full >> /etc/apt/sources.list.d/neurodebian.sources.list && \
+#     apt-key add /root/.neurodebian.gpg && \
+#     (apt-key adv --refresh-keys --keyserver hkp://ha.pool.sks-keyservers.net 0xA5D32F012649A5A9 || true)
 
-ARG DEBIAN_FRONTEND=noninteractive
+# RUN echo deb-src http://neuro.debian.net/debian bionic main contrib> /etc/apt/sources.list.d/neurodebian.list
 
-RUN apt-get update -y -qq \
-    && apt-get install -yq --no-install-recommends \
-          ca-certificates \
-          curl \
-          g++ \
-          gcc \
-          git \
-          libglib2.0-dev \
-          libglu1-mesa-dev \
-          libglw1-mesa-dev \
-          libgsl-dev \
-          libmotif-dev \
-          libxi-dev \
-          libxmhtml-dev \
-          libxmu-dev \
-          libxpm-dev \
-          libxt-dev \
-          m4 \
-          python-dev \
-          python-matplotlib \
-          python-numpy \
-          python-scipy \
-          python-qt4 \
-          python-rpy2 \
-          python-tk \
-          python-mpltoolkits.basemap \
-          r-base \
-          tcsh \
-          vim \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && curl -fsSL https://bootstrap.pypa.io/get-pip.py | python - --no-cache-dir \
-    && pip install --no-cache-dir \
-          scipy \
-          rpy2 
+RUN wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/cmake/3.12.1-1/cmake_3.12.1.orig.tar.gz \
+  ; tar xzvf cmake_3.12.1.orig.tar.gz \
+  ; cd cmake-3.12.1 \
+  ; ./bootstrap && make \
+  ; make install \
+  ; cd .. \
+  ;rm -fr cmake* 
 
-# Copy AFNI source code. This can invalidate the build cache.
-ARG AFNI_ROOT=/opt/afni
-COPY [".", "$AFNI_ROOT/"]
+# RUN apt-get update & apt-get -y build-dep afni
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    freeglut3-dev \
+    libgsl-dev \
+    libglew-dev \
+    libglib2.0-dev \
+    libglw-dev \
+    libinsighttoolkit3-dev \
+    libopenjpeg-dev 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libxmu-dev \
+    libxpm-dev \
+    libxt-dev  \
+    libjpeg-dev
 
-ARG AFNI_MAKEFILE_SUFFIX=linux_ubuntu_16_64
-ARG AFNI_WITH_COVERAGE="0"
 
-WORKDIR "$AFNI_ROOT/src"
-RUN \
-    if [ "$AFNI_WITH_COVERAGE" != "0" ]; then \
-      echo "Adding testing and coverage components" \
-      && sed -i 's/# CPROF = /CPROF =  -coverage /' Makefile.$AFNI_MAKEFILE_SUFFIX \
-      && curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3 - --no-cache-dir \
-      && pip3 install --no-cache-dir \
-            codecov \
-            pytest \
-            pytest-cov \
-            numpy \
-            pandas; \
-    fi \
-    \
-    # Clean AFNI src directory (*.o files can cause build to fail).
-    && make -f  Makefile.$AFNI_MAKEFILE_SUFFIX afni_src.tgz \
-    && mv afni_src.tgz .. \
-    && cd .. \
-    \
-    # Empty the src directory, and replace with the contents of afni_src.tgz
-    && rm -rf src/ && mkdir src \
-    && tar -xzf afni_src.tgz -C $AFNI_ROOT/src --strip-components=1 \
-    && rm afni_src.tgz \
-    \
-    # Build AFNI.
-    && cd src \
-    && cp Makefile.$AFNI_MAKEFILE_SUFFIX Makefile \
-    && make itall \
-    && mv $AFNI_MAKEFILE_SUFFIX $AFNI_ROOT/abin
+# #######################################
+ADD src /afni/src/
+ADD cmake /afni/cmake/
+ADD CMakeLists.txt /afni/
+ADD Dockerfile /afni/
+RUN  mkdir -p /build
+WORKDIR /build
 
-ENV PATH="$AFNI_ROOT/abin:$PATH"
-WORKDIR "$AFNI_ROOT"
+RUN  cmake /afni -DBUILD_SHARED_LIBS=ON
+RUN make -j 20 install
+# RUN apsearch -update_all_afni_help
+
