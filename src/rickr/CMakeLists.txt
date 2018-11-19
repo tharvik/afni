@@ -39,7 +39,7 @@ target_link_libraries(3dresample mri)
 
 add_library(rickr r_new_resam_dset.c r_idisp.c r_misc.c)
 
-target_include_directories(rickr PUBLIC niml)
+target_include_directories(rickr PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 install(TARGETS rickr column_cat serial_helper Dimon1 Dimon tokens file_tool 
        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

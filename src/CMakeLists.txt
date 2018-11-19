@@ -98,7 +98,10 @@ macro(optional_bundle name)
 endmacro(optional_bundle)
 
 
-foreach(bundled avovk coxplot crorden eispack gifti  nifti niml Audio
+
+add_subdirectory(niml)
+
+foreach(bundled avovk coxplot crorden eispack gifti  nifti Audio
        ptaylor qhull rickr SUMA svm volpack XmHTML 3DEdge converted_from_fortran)
 	optional_bundle(${bundled})
 endforeach(bundled)
@@ -149,15 +152,15 @@ foreach(type byte complex float rgbyte short)
 	list(APPEND SOMEAFOBJS "${CMAKE_CURRENT_BINARY_DIR}/afni_slice_${type}.c")
 endforeach(type)
 
-set(LIBHEADERS 3ddata.h AFNI_label.h Amalloc.h afni_environ.h afni_suma.h
+add_library(libheaders OBJECT 3ddata.h AFNI_label.h Amalloc.h afni_environ.h afni_suma.h
 	afni_warp.h coxplot.h cs.h cs_qsort_small.h cs_sort_template.h
 	debugtrace.h editvol.h eispack.h killer.h list_struct.h machdep.h
 	mcw_glob.h mcw_malloc.h mri_dicom_stuff.h mri_warpfield.h mrilib.h
-	multivector.h niml.h tagset.h thd_atlas.h thd_compress.h thd_iochan.h
+	multivector.h  tagset.h thd_atlas.h thd_compress.h thd_iochan.h
 	thd_maker.h thd_ttatlas_CA_EZ.h thd_ttatlas_query.h vecmat.h vol2surf.h
+  AFNI_version.h niml.h
 )
-set(LIBHEADERS ${LIBHEADERS} "${CMAKE_CURRENT_BINARY_DIR}/AFNI_version.h")
-set(IMOBJS display.c imseq.c bbox.c xim.c xutil.c LiteClue.c)
+target_link_libraries(libheaders rickr)
 
 file(GLOB AFNI_HIST_FILES "afni_history*.c")
 foreach(filename afni_fimmer_compute.c afni_history.c afni_open.c
@@ -228,8 +231,8 @@ foreach(target Xphace afni_open aiv)
   target_include_directories(${target} PUBLIC ${NIFTI_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
 endforeach(target)
 
-add_library(mri ${MRI_OBJS} ${THD_OBJS} ${EDT_OBJS} ${CS_OBJS} ${SUMA_OBJS} ${MISC_OBJS} ${SOMEAFOBJS} ${NIML_OBJS} ${AUDIO_OBJS})
-add_library(mrix ${IMOBJS})
+add_library(mri ${MRI_OBJS} ${THD_OBJS} ${EDT_OBJS} ${CS_OBJS} ${SUMA_OBJS} ${MISC_OBJS} ${SOMEAFOBJS} ${AUDIO_OBJS} $<TARGET_OBJECTS:niml::niml>)
+add_library(mrix display.c imseq.c bbox.c xim.c xutil.c xutil_webber.c LiteClue.c)
 add_library(parser OBJECT parser.c parser_int.c)
 add_library(plug_drealtime plug_realtime.c)
 add_library(plug_maxima plug_maxima.c maxima.c)
@@ -323,7 +326,6 @@ set_source_files_properties(3dDeconvolve_f PROPERTIES COMPILE_DEFINITIONS "FLOAT
 set_source_files_properties(gifti_choice.c PROPERTIES COMPILE_DEFINITIONS "DTYPE=${type}")
 
 set_target_properties(afni PROPERTIES PUBLIC_HEADER "${AFNI_HEADERS}")
-set_target_properties(mri PROPERTIES PUBLIC_HEADER ${LIBHEADERS})
 
 
 
@@ -333,7 +335,7 @@ target_include_directories(3dDeconvolve_f PUBLIC ${COXPLOT_INCLUDE_DIRS})
 target_include_directories(3dMSE PUBLIC ${COXPLOT_INCLUDE_DIRS})
 target_include_directories(3dretroicor PUBLIC ${COXPLOT_INCLUDE_DIRS} ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${NIFTI_INCLUDE_DIRS})
 target_include_directories(3DEdge PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
-target_include_directories(SUMA PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
+target_include_directories(SUMA PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS} ${3DEDGE_INCLUDE_DIRS})
 target_include_directories(rickr PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
 target_include_directories(coxplot PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS} ${COXPLOT_INCLUDE_DIRS})
 target_include_directories(eispack PUBLIC ${CONVERTED_FROM_FORTRAN_INCLUDE_DIRS})
@@ -357,7 +359,7 @@ endforeach(target)
 target_link_libraries(3dretroicor PUBLIC mri converted_from_fortran mrix coxplot)
 target_link_libraries(3dNLfim PUBLIC mri mrix ${CMAKE_DL_LIBS})
 
-target_link_libraries(parser PUBLIC coxplot)
+target_link_libraries(parser PUBLIC coxplot libheaders)
 target_link_libraries(1dgrayplot PUBLIC mri coxplot ${XT_LIBRARIES})
 target_link_libraries(1dplot PUBLIC mrix mri nifti2_io ${X11_Xt_LIB} ${X11_LIBRARIES})
 target_link_libraries(3dDeconvolve PUBLIC mri coxplot)
@@ -370,9 +372,9 @@ target_link_libraries(afni_open PUBLIC mri)
 target_link_libraries(aiv PUBLIC mrix nifti2_io)
 # target_include_directories(aiv ${NIFTI_INCLUDE_DIRS})
 
-target_link_libraries(mri PUBLIC mrix rickr nifti2_io eispack netcdf m znz nifticdf giftiio 3DEdge volpack
+target_link_libraries(mri PUBLIC  libheaders rickr mrix nifti2_io eispack netcdf m znz nifticdf giftiio 3DEdge volpack
    ${XMHTML_LIBRARIES} ${CONVERTED_FROM_FORTRAN_LIBRARIES} ${XT_LIBRARIES})
-target_link_libraries(mrix PUBLIC coxplot)
+target_link_libraries(mrix PUBLIC coxplot  rickr libheaders)
 target_link_libraries(to3d PUBLIC mri mrix nifti2_io ${MOTIF_LIBRARIES} ${XT_LIBRARIES})
 
 target_link_libraries(3dedge3 PUBLIC nifti2_io mri)
